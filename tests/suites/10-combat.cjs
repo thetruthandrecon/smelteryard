@@ -45,6 +45,24 @@ module.exports = {
         run(0.5);
         return 100 - big.hp;
       };
+      // soft lock-on, on a dummy 17.5 m away that opts in with lockOn = true
+      const tgt = ENTS[1]; // at x -10.5, z 2.5
+      const lockTrial = ({ lockOn, offDeg, dodge = 0, turn }) => {
+        fresh(tgt); tgt.lockOn = lockOn; tuning.lockOnTurn = turn ?? 90;
+        placeAt({ x: -10.5 - tuning.camShoulder, y: 0, z: 20 }); cam.yaw = offDeg * Math.PI / 180; cam.pitch = 0; run(0.2);
+        press(); if (dodge) { tgt.x += dodge; tgt.x0 += dodge; } run(0.8);
+        const hit = tgt.hp < tgt.maxHp || !tgt.alive;
+        if (dodge) { tgt.x -= dodge; tgt.x0 -= dodge; }
+        delete tgt.lockOn; tuning.lockOnTurn = 90;
+        return hit;
+      };
+      out.lock = {
+        beside: lockTrial({ lockOn: true, offDeg: 5 }),
+        besideNotLockable: lockTrial({ lockOn: false, offDeg: 5 }),
+        farOff: lockTrial({ lockOn: true, offDeg: 12 }),
+        homing: lockTrial({ lockOn: true, offDeg: 0, dodge: 1.2 }),
+        noHoming: lockTrial({ lockOn: true, offDeg: 0, dodge: 1.2, turn: 0 }),
+      };
       out.damage = { level1: charged((tuning.chargeTime1 + tuning.chargeTime2) / 2), level2: charged(tuning.chargeTime2 + 0.1), expect1: 1 + tuning.chargeDamage1, expect2: 1 + tuning.chargeDamage2 };
       return out;
     });
@@ -55,6 +73,9 @@ module.exports = {
     expect(r.charge.maxLevel === 2 && r.charge.dummyDestroyed, 'a full charge should fire a level 2 shot that destroys a dummy');
     expect(r.pierce.open.frontHit && r.pierce.open.backHit, 'a full charge should pierce through to a second target');
     expect(r.damage.level1 === r.damage.expect1 && r.damage.level2 === r.damage.expect2, 'charged shots should do the damage set in the tuning panel (level 1 and level 2)');
+    expect(r.lock.beside && !r.lock.besideNotLockable, 'soft lock-on: a shot 5° beside a lockable target should hit it, but not an ordinary enemy');
+    expect(!r.lock.farOff, 'soft lock-on: a shot 12° off (outside the 7° cone) should miss');
+    expect(r.lock.homing && !r.lock.noHoming, 'soft lock-on: a locked shot should follow a target that sidesteps 1.2 m (and miss with homing off)');
     expect(r.damage.expect2 - 1 > 8, 'a full charge should beat tapping for the same 1.3 s (about 8 damage)');
     expect(r.pierce.blocked.frontHit && !r.pierce.blocked.backHit, 'a full charge should stop on a target that can\'t be hurt right now (damageable === false)');
   },

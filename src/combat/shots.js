@@ -1,6 +1,7 @@
 // The arm cannon: aiming, tap shots, two charge levels, shot flight and hits.
 import { ENTS, input, cam, state, events, on } from '../core/world.js';
 import { tuning, defineTuning } from '../core/tuning.js';
+import { clamp } from '../core/util.js';
 import { makeOrb } from '../core/render.js';
 import { segSolids, rayBox } from '../player/physics.js';
 import { p } from '../player/player.js';
@@ -16,6 +17,11 @@ defineTuning('Combat', [
   // a full charge takes 1.3 s, in which tapping does about 8 damage, so charging has to beat that
   ['chargeDamage1', 'Charge level 1 damage', 4, 1, 10, 1, ''],
   ['chargeDamage2', 'Charge level 2 damage', 12, 2, 30, 1, ''],
+  // soft lock-on: a shot aimed just beside a lockable target (the boss) bends onto it, and keeps
+  // turning toward it in flight; a shot aimed right at it lands where you aimed
+  ['lockOn', 'Soft lock-on', true],
+  ['lockOnAngle', 'Lock-on cone', 7, 0, 20, 0.5, '°'],
+  ['lockOnTurn', 'Lock-on homing', 90, 0, 360, 5, '°/s'],
 ]);
 
 export const SHOTS = [];
@@ -28,6 +34,38 @@ export const SHOT_STATS = [
 // a tap does 1 damage; charged shots use the tuning panel values
 export const shotDamage = (level) => (level === 2 ? tuning.chargeDamage2 : level === 1 ? tuning.chargeDamage1 : 1);
 
+// lock-on: bosses by default; any enemy can opt in or out by setting e.lockOn = true / false
+const DEG = Math.PI / 180;
+const lockable = (e) => e.alive && (e.lockOn ?? e.kind === 'boss');
+// the point of box mn..mx nearest the line o + f*s, kept a little inside the box
+function nearestOnBox(ox, oy, oz, fx, fy, fz, mn, mx) {
+  const cx = (mn[0] + mx[0]) / 2, cy = (mn[1] + mx[1]) / 2, cz = (mn[2] + mx[2]) / 2;
+  const s = (cx - ox) * fx + (cy - oy) * fy + (cz - oz) * fz;
+  if (s <= 0) return null;
+  const k = [ox + fx * s, oy + fy * s, oz + fz * s];
+  for (let a = 0; a < 3; a++) { const inset = Math.min(0.15, (mx[a] - mn[a]) / 4); k[a] = clamp(k[a], mn[a] + inset, mx[a] - inset); }
+  return k;
+}
+// the lockable target nearest the aim line, inside the lock-on cone and in clear view of (fromX, fromY, fromZ)
+function findLock(a, fromX, fromY, fromZ) {
+  if (!tuning.lockOn || tuning.lockOnAngle <= 0) return null;
+  let best = null, bestCos = Math.cos(tuning.lockOnAngle * DEG);
+  for (const e of ENTS) {
+    if (!lockable(e)) continue;
+    const k = nearestOnBox(a.ox, a.oy, a.oz, a.fx, a.fy, a.fz, entMin(e), entMax(e));
+    if (!k) continue;
+    const dx = k[0] - a.ox, dy = k[1] - a.oy, dz = k[2] - a.oz, d = Math.hypot(dx, dy, dz);
+    if (d > 80) continue;
+    const c = (dx * a.fx + dy * a.fy + dz * a.fz) / d;
+    if (c < bestCos) continue;
+    if (segSolids(fromX, fromY, fromZ, k[0] - fromX, k[1] - fromY, k[2] - fromZ, 0) < 1) continue;
+    best = { e, k }; bestCos = c;
+  }
+  return best;
+}
+// what the reticle is locked onto right now (updated every frame; the UI can show it)
+export const lockView = { target: null };
+
 // the line from the camera's shoulder point through the reticle
 export function aimRay() {
   const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
@@ -37,17 +75,20 @@ export function aimRay() {
 // fire from the arm cannon toward whatever the reticle is on
 export function fireShot(level) {
   const a = aimRay(), L = 150;
-  let t = segSolids(a.ox, a.oy, a.oz, a.fx * L, a.fy * L, a.fz * L);
-  for (const e of ENTS) if (e.alive) { const h = rayBox(a.ox, a.oy, a.oz, a.fx * L, a.fy * L, a.fz * L, entMin(e), entMax(e), 0.15); if (h < t) t = h; }
+  let t = segSolids(a.ox, a.oy, a.oz, a.fx * L, a.fy * L, a.fz * L), aimEnt = null;
+  for (const e of ENTS) if (e.alive) { const h = rayBox(a.ox, a.oy, a.oz, a.fx * L, a.fy * L, a.fz * L, entMin(e), entMax(e), 0.15); if (h < t) { t = h; aimEnt = e; } }
   if (!isFinite(t)) t = 1;
-  const ax = a.ox + a.fx * L * t, ay = a.oy + a.fy * L * t, az = a.oz + a.fz * L * t;
+  let ax = a.ox + a.fx * L * t, ay = a.oy + a.fy * L * t, az = a.oz + a.fz * L * t;
   const rx = a.cy, rz = -a.sy, hx = -a.sy, hz = -a.cy;
   const mx = p.x + rx * 0.42 + hx * a.cp * 0.72, my = p.y + 1.42 + a.sp * 0.72, mz = p.z + rz * 0.42 + hz * a.cp * 0.72;
+  // soft lock-on: on target, keep the aim point; just beside a lockable target, aim at its nearest edge
+  let lock = aimEnt && lockable(aimEnt) ? aimEnt : null;
+  if (!aimEnt) { const near = findLock(a, mx, my, mz); if (near) { [ax, ay, az] = near.k; lock = near.e; } }
   let dx = ax - mx, dy = ay - my, dz = az - mz;
   let len = Math.hypot(dx, dy, dz);
   if (len < 1.2 || (dx * a.fx + dy * a.fy + dz * a.fz) / (len || 1) < 0.25) { dx = a.fx; dy = a.fy; dz = a.fz; len = 1; }
   const st = SHOT_STATS[level], speed = tuning.shotSpeed * st.speed;
-  SHOTS.push({ x: mx, y: my, z: mz, vx: (dx / len) * speed, vy: (dy / len) * speed, vz: (dz / len) * speed, level, life: 1.6, hit: new Set() });
+  SHOTS.push({ x: mx, y: my, z: mz, vx: (dx / len) * speed, vy: (dy / len) * speed, vz: (dz / len) * speed, level, life: 1.6, hit: new Set(), lock });
   p.aimTimer = 0.55;
   state.shotsFired += 1;
   events.push({ type: 'shoot', level, x: mx, y: my, z: mz });
@@ -73,10 +114,33 @@ export function updateFire(dt) {
     }
   }
 }
+// turn a locked shot toward the nearest part of its target, at most lockOnTurn degrees a second;
+// it lets go once it has hit the target or flown past it
+function steer(s, dt) {
+  const e = s.lock;
+  if (!e.alive || s.hit.has(e) || !tuning.lockOn || tuning.lockOnTurn <= 0) { s.lock = null; return; }
+  const mn = entMin(e), mx = entMax(e);
+  const tx = clamp(s.x, mn[0], mx[0]), ty = clamp(s.y, mn[1], mx[1]), tz = clamp(s.z, mn[2], mx[2]);
+  let wx = tx - s.x, wy = ty - s.y, wz = tz - s.z;
+  const d = Math.hypot(wx, wy, wz), speed = Math.hypot(s.vx, s.vy, s.vz);
+  if (d < 0.01 || speed < 0.01) return;
+  wx /= d; wy /= d; wz /= d;
+  let ux = s.vx / speed, uy = s.vy / speed, uz = s.vz / speed;
+  const ang = Math.acos(clamp(ux * wx + uy * wy + uz * wz, -1, 1));
+  if (ang > 60 * DEG) { s.lock = null; return; }
+  const turn = tuning.lockOnTurn * DEG * dt;
+  if (ang <= turn) { ux = wx; uy = wy; uz = wz; }
+  else {
+    const a = Math.sin(ang - turn) / Math.sin(ang), b = Math.sin(turn) / Math.sin(ang);
+    ux = ux * a + wx * b; uy = uy * a + wy * b; uz = uz * a + wz * b;
+  }
+  s.vx = ux * speed; s.vy = uy * speed; s.vz = uz * speed;
+}
 export function updateShots(dt) {
   for (let i = SHOTS.length - 1; i >= 0; i--) {
     const s = SHOTS[i], st = SHOT_STATS[s.level];
     s.life -= dt;
+    if (s.lock) steer(s, dt);
     const dx = s.vx * dt, dy = s.vy * dt, dz = s.vz * dt;
     const tWall = segSolids(s.x, s.y, s.z, dx, dy, dz, 0);
     const hits = [];
@@ -107,6 +171,8 @@ export function resetShots() { SHOTS.length = 0; }
 
 const shotOrbs = Array.from({ length: 40 }, () => makeOrb(0x3ad6c6));
 export function renderShots() {
+  const near = findLock(aimRay(), p.x, p.y + 1.42, p.z);
+  lockView.target = near ? near.e : null;
   shotOrbs.forEach((o, i) => {
     const s = SHOTS[i];
     if (!s) { o.g.visible = false; return; }
