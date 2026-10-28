@@ -14,6 +14,8 @@ defineTuning('Enemies', [
   ['enemiesFire', 'Enemies attack', true],
   ['slagBlobDamage', 'Slag blob damage', 3, 0, 10, 0.5, 'HP'],
   ['slagFireDamage', 'Slag fire damage', 2, 0, 10, 0.5, 'HP'],
+  ['groundWaveDamage', 'Ground wave damage', 3, 0, 10, 0.5, 'HP'],
+  ['groundWaveSpeed', 'Ground wave speed', 12, 5, 22, 0.5, 'm/s'],
 ]);
 
 // size (half-widths and height), health, seconds to respawn after being destroyed, contact damage
@@ -38,9 +40,11 @@ export const entMax = (e) => [e.x + e.hx, e.y + e.hy, e.z + e.hz];
 
 export const ESHOTS = [];
 export const FIRE_PATCHES = [];
+export const GROUND_WAVES = [];
 const BOSS_CORE = { x: 0, y: 2.12, z: -0.72, radius: 0.52 };
 const SHOT_RADII = [0.16, 0.36, 0.62];
 const SLAG_FLIGHT = 0.8, SLAG_GRAVITY = 18, SLAG_RADIUS = 0.32, SLAG_PATCH_LIFE = 3, SLAG_PATCH_RADIUS = 0.9;
+const GROUND_WAVE_DEPTH = 0.42;
 
 function isBossCoreHit(e, x, y, z, level) {
   const radius = BOSS_CORE.radius + (SHOT_RADII[level] ?? 0);
@@ -55,6 +59,7 @@ export function resetEnt(e) {
     e.activated = false; e.damageable = false; e.combatReady = false;
     e.introTimer = 0; e.introProgress = 0; e.phase = 0; e.introEntering = false;
     e.chargeDirZ = 0; e.chargeTargetZ = e.entryZ; e.chargeX = e.x0;
+    e.groundWaveDirZ = 0;
     e.nextAttack = 'charge';
   }
 }
@@ -62,6 +67,7 @@ export function resetEnemies() {
   for (const e of ENTS) resetEnt(e);
   ESHOTS.length = 0;
   FIRE_PATCHES.length = 0;
+  GROUND_WAVES.length = 0;
 }
 
 export function activateBoss() {
@@ -80,6 +86,7 @@ function resetBossEncounter(e) {
   resetEnt(e);
   for (let i = ESHOTS.length - 1; i >= 0; i--) if (ESHOTS[i].kind === 'slag') ESHOTS.splice(i, 1);
   FIRE_PATCHES.length = 0;
+  GROUND_WAVES.length = 0;
   const door = LEVEL.named.bossDoor;
   if (door) {
     door.open = 0; door.triggered = false; door.openedAt = 0;
@@ -100,8 +107,16 @@ function startBossSlagTell(e) {
   events.push({ type: 'bosstelegraph', e, attack: 'slag' });
 }
 
+function startBossGroundTell(e) {
+  e.groundWaveDirZ = Math.sign(p.z - e.z) || 1;
+  e.yaw = e.groundWaveDirZ > 0 ? Math.PI : 0;
+  e.st = 'groundTell'; e.t2 = 0.5; e.tele = 1;
+  events.push({ type: 'bosstelegraph', e, attack: 'groundpound' });
+}
+
 function startBossNextTell(e) {
   if (e.nextAttack === 'slag') startBossSlagTell(e);
+  else if (e.nextAttack === 'groundpound') startBossGroundTell(e);
   else startBossChargeTell(e);
 }
 
@@ -123,7 +138,21 @@ function launchBossSlag(e) {
     });
   }
   events.push({ type: 'bossslag', e, x: startX, y: startY, z: startZ });
-  e.nextAttack = 'charge'; e.st = 'idle'; e.cd = 1; e.tele = 0;
+  e.nextAttack = 'groundpound'; e.st = 'idle'; e.cd = 1; e.tele = 0;
+}
+
+function launchBossGroundWave(e) {
+  const dirZ = e.groundWaveDirZ || Math.sign(p.z - e.z) || 1;
+  const endZ = dirZ > 0 ? e.chargeFrontZ : e.chargeBackZ;
+  const speed = tuning.groundWaveSpeed;
+  GROUND_WAVES.push({
+    x: (e.chargeMinX + e.chargeMaxX) * 0.5, y: e.y, z: e.z,
+    width: e.chargeMaxX - e.chargeMinX, dirZ, endZ, speed,
+    damage: tuning.groundWaveDamage, depth: GROUND_WAVE_DEPTH,
+    life: Math.abs(endZ - e.z) / speed + 0.1, crossed: false,
+  });
+  events.push({ type: 'bossgroundslam', e, x: e.x, y: e.y, z: e.z, dirZ });
+  e.nextAttack = 'charge'; e.st = 'groundRecover'; e.t2 = 0.25; e.tele = 0;
 }
 
 function updateBoss(e, dt, attack) {
@@ -177,6 +206,12 @@ function updateBoss(e, dt, attack) {
     }
     e.t2 = Math.max(0, e.t2 - dt);
     if (e.t2 <= 0 && !e.introEntering) launchBossSlag(e);
+  } else if (e.st === 'groundTell') {
+    e.t2 = Math.max(0, e.t2 - dt);
+    if (e.t2 <= 0) launchBossGroundWave(e);
+  } else if (e.st === 'groundRecover') {
+    e.t2 = Math.max(0, e.t2 - dt);
+    if (e.t2 <= 0) { e.st = 'idle'; e.cd = 1; }
   } else if (e.st === 'charge') {
     const dz = e.chargeTargetZ - e.z, move = e.chargeSpeed * dt;
     e.x = e.chargeX;
@@ -313,6 +348,23 @@ export function updateEnemies(dt) {
     if (attack && p.y <= fire.y + 0.1 && p.y + H > fire.y - 0.1 && Math.hypot(dx, dz) <= fire.radius + R) {
       if (hurt(tuning.slagFireDamage * tuning.damageTaken, dx, dz)) events.push({ type: 'slagfirehit', x: p.x, y: fire.y, z: p.z });
     }
+  }
+  for (let i = GROUND_WAVES.length - 1; i >= 0; i--) {
+    const wave = GROUND_WAVES[i];
+    const fromZ = wave.z, toZ = fromZ + wave.dirZ * wave.speed * dt;
+    const halfDepth = wave.depth * 0.5;
+    const lowZ = Math.min(fromZ, toZ) - halfDepth, highZ = Math.max(fromZ, toZ) + halfDepth;
+    const overlapsX = p.x + R >= wave.x - wave.width * 0.5 && p.x - R <= wave.x + wave.width * 0.5;
+    const overlapsZ = p.z + R >= lowZ && p.z - R <= highZ;
+    if (!wave.crossed && overlapsX && overlapsZ) {
+      wave.crossed = true;
+      events.push({ type: 'groundwavepass', x: p.x, y: p.y, z: p.z, grounded: p.grounded });
+      if (attack && p.grounded && hurt(wave.damage * tuning.damageTaken, 0, wave.dirZ)) {
+        events.push({ type: 'groundwavehit', x: p.x, y: p.y, z: p.z });
+      }
+    }
+    wave.z = toZ; wave.life -= dt;
+    if (wave.life <= 0 || (wave.dirZ > 0 ? wave.z > wave.endZ : wave.z < wave.endZ)) GROUND_WAVES.splice(i, 1);
   }
   for (let i = ESHOTS.length - 1; i >= 0; i--) {
     const s = ESHOTS[i];
