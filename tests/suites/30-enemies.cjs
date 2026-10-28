@@ -5,7 +5,7 @@ module.exports = {
   async run({ page, expect, log }) {
     const r = await page.evaluate(() => {
       const G = window.__game; G.loadLevel('yard');
-      const { p, cam, state, placeAt, ENTS, STEP, tuning } = G; const { run, press, fresh } = window.__t;
+      const { p, cam, state, placeAt, ENTS, SHOTS, STEP, tuning } = G; const { run, press, fresh } = window.__t;
       const out = {};
       // turret hits and knockback
       const tur = ENTS[5]; fresh(tur);
@@ -37,13 +37,64 @@ module.exports = {
       out.flyer = { states: [...seen].join('>'), hurtPlayer: p.hp < hpA };
       placeAt({ x: -10, y: 0, z: 10 }); run(5);
       out.flyer.backHome = fl.st === 'hover' && Math.hypot(fl.x - fl.x0, fl.z - fl.z0) < 0.01;
+
+      // boss shots bounce with impact while the intro makes it invulnerable, then damage health
+      G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse();
+      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -211.2 }); G.step(STEP);
+      const boss = ENTS.find((e) => e.kind === 'boss');
+      const shot = (z, level = 0) => SHOTS.push({ x: 0, y: 30, z, vx: 0, vy: 0, vz: -45, level, life: 1.6, hit: new Set() });
+      let eventStart = G.events.length;
+      shot(-237); run(0.2);
+      out.bossBlockedShot = { hp: boss.hp, impact: G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked), shotRemoved: SHOTS.length === 0 };
+      run(3.1);
+      out.bossReady = { activated: boss.activated, combatReady: boss.combatReady, damageable: boss.damageable };
+      eventStart = G.events.length;
+      shot(-223); run(0.6);
+      out.bossDamage = { hp: boss.hp, impact: G.events.slice(eventStart).some((e) => e.type === 'hit' && !e.blocked) };
+
+      // touching the Warden hurts, and the half-second Charge warning precedes its ram
+      boss.st = 'idle'; boss.cd = 100; state.noEnemies = false;
+      placeAt({ x: boss.x, y: boss.y, z: boss.z }); p.iframes = 0; p.hp = 16; G.step(STEP);
+      out.bossContactDamage = 16 - p.hp;
+      boss.st = 'idle'; boss.cd = 0; boss.chargeDirZ = 0; boss.x = -3; p.iframes = 0; p.hp = 16;
+      placeAt({ x: 3.5, y: boss.y, z: boss.z + 5 });
+      eventStart = G.events.length; G.step(STEP);
+      const bossWarned = G.events.slice(eventStart).some((e) => e.type === 'bosstelegraph' && e.attack === 'charge');
+      run(0.25);
+      const linedUpDuringTell = boss.x > -3;
+      placeAt({ x: 2.5, y: boss.y, z: p.z });
+      run(0.26);
+      const chargeStarted = boss.st === 'charge';
+      const lockedX = boss.x;
+      run(0.2);
+      const chargeDamage = 16 - p.hp;
+      placeAt({ x: -3.5, y: boss.y, z: p.z }); run(0.1);
+      const laneLocked = Math.abs(boss.x - lockedX) < 0.001;
+      run(0.6);
+      const frontReached = boss.st === 'idle' && boss.z === boss.chargeFrontZ;
+      boss.st = 'idle'; boss.cd = 0; boss.z = boss.chargeFrontZ; boss.chargeDirZ = -1; p.iframes = 10;
+      placeAt({ x: boss.x, y: boss.y, z: boss.z - 5 }); G.step(STEP); run(0.51);
+      const reverseChargeStarted = boss.st === 'charge';
+      run(1.5);
+      out.bossCharge = { warned: bossWarned, linedUpDuringTell, alignedX: +lockedX.toFixed(1), started: chargeStarted, laneLocked, frontReached, reverseChargeStarted, fullCross: boss.st === 'idle' && boss.z === boss.chargeBackZ, damage: chargeDamage, speed: boss.chargeSpeed, lane: +Math.abs(boss.chargeFrontZ - boss.chargeBackZ).toFixed(1), frontZ: boss.chargeFrontZ, backZ: boss.chargeBackZ };
       return out;
     });
     log('enemies', r);
+    await page.waitForFunction(() => {
+      const track = document.querySelector('.boss-track');
+      return !document.getElementById('boss-hud').hidden && track && track.getAttribute('aria-valuenow') === '99';
+    }, null, { timeout: 3000 });
+    const bossHealthBar = await page.evaluate(() => ({ value: document.querySelector('.boss-track').getAttribute('aria-valuenow'), label: document.getElementById('boss-health-label').textContent }));
+    log('boss health bar after hit', bossHealthBar);
     expect(r.turret.hits >= 1 && r.turret.firstKnock > 0, 'the turret should hit and knock back a player standing in front of it');
     expect(r.walker.repeatable && !r.walker.stuck && r.walker.flips >= 2, 'the walker should patrol the same way every time and turn at both ends');
     expect(r.walker.contactDamage > 0, 'touching a walker should hurt');
     expect(r.walker.destroyedBy3Shots && r.walker.respawnedHome, 'a walker should die to 3 shots and respawn at home');
     expect(r.flyer.states === 'hover>tele>swoop>return' && r.flyer.hurtPlayer && r.flyer.backHome, 'the flyer should hover, telegraph, swoop, hit, and return home');
+    expect(r.bossBlockedShot.hp === 100 && r.bossBlockedShot.impact && r.bossBlockedShot.shotRemoved, 'an intro-blocked boss shot should spark and stop without damaging the boss');
+    expect(r.bossReady.activated && r.bossReady.combatReady && r.bossReady.damageable && r.bossDamage.hp === 99 && r.bossDamage.impact, 'the Warden should become damageable at full intro and show impacts while losing health');
+    expect(r.bossContactDamage === 3, 'touching the Warden should deal 3 HP contact damage');
+    expect(r.bossCharge.warned && r.bossCharge.linedUpDuringTell && r.bossCharge.alignedX === 2.5 && r.bossCharge.started && r.bossCharge.laneLocked && r.bossCharge.frontReached && r.bossCharge.reverseChargeStarted && r.bossCharge.fullCross && r.bossCharge.damage === 4 && r.bossCharge.speed === 18 && r.bossCharge.lane === 25.8 && r.bossCharge.frontZ === -218 && r.bossCharge.backZ === -243.8, 'the Warden should track the player during its tell, lock the lane, and Charge across the full arena for 4 HP at 18 m/s');
+    expect(bossHealthBar.value === '99' && bossHealthBar.label === '99%', 'the boss health bar should show health lost to a shot');
   },
 };

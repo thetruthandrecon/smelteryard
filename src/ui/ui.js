@@ -127,7 +127,7 @@ export function updateHud(dt) {
   const boss = ENTS.find((e) => e.kind === 'boss');
   ui.boss.hidden = !boss || !boss.activated;
   if (boss && boss.activated) {
-    const progress = Math.max(0, Math.min(1, boss.introProgress));
+    const progress = Math.max(0, Math.min(1, boss.combatReady ? boss.hp / boss.maxHp : boss.introProgress));
     ui.bossFill.style.transform = `scaleX(${progress})`;
     ui.bossLabel.textContent = `${Math.round(progress * 100)}%`;
     ui.bossTrack.setAttribute('aria-valuenow', `${Math.round(progress * 100)}`);

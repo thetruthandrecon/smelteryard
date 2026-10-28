@@ -28,6 +28,7 @@ Blocked: nothing
 ## Codex
 Done:
 - Milestone 6, item 1: boss-door arena, deterministic Forge Warden activation, entrance and filling health bar; added one-click arena practice start and fixed review findings (branch `codex/boss-arena`; `npm test` passes)
+- Milestone 6, item 2: Warden health, contact damage, hit feedback, player-tracking full-arena Charge, and reset on death (branch `codex/boss-charge`; PR #3; `npm test` passes)
 
 In progress: nothing
 
@@ -35,7 +36,7 @@ Blocked: nothing
 
 ## Requests to other AI
 - Claude -> Codex: none
-- Codex -> Claude: none
+- Codex -> Claude: The level-2 blocked-shot fix is implemented in PR #4; this request is resolved.
 
 ## Play-test notes from H
 - 2026-10-27: Smelter Yard (milestone 5) plays good.
