@@ -42,15 +42,25 @@ module.exports = {
       G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse();
       state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -211.2 }); G.step(STEP);
       const boss = ENTS.find((e) => e.kind === 'boss');
-      const shot = (z, level = 0) => SHOTS.push({ x: 0, y: 30, z, vx: 0, vy: 0, vz: -45, level, life: 1.6, hit: new Set() });
+      const shot = (z, level = 0, y = 30, x = 0) => SHOTS.push({ x, y, z, vx: 0, vy: 0, vz: -45, level, life: 1.6, hit: new Set() });
       let eventStart = G.events.length;
       shot(-237); run(0.2);
       out.bossBlockedShot = { hp: boss.hp, impact: G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked), shotRemoved: SHOTS.length === 0 };
       run(3.1);
       out.bossReady = { activated: boss.activated, combatReady: boss.combatReady, damageable: boss.damageable };
       eventStart = G.events.length;
-      shot(-223); run(0.6);
+      shot(-223, 0, boss.y + 0.6); run(0.6);
       out.bossDamage = { hp: boss.hp, impact: G.events.slice(eventStart).some((e) => e.type === 'hit' && !e.blocked) };
+
+      // the core sphere takes 1.5x damage compared to the same level body hit
+      let bossHp = boss.hp;
+      eventStart = G.events.length;
+      shot(boss.z + 4, 0, boss.y + 2.12); run(0.2);
+      out.bossCoreHit = { damage: +(bossHp - boss.hp).toFixed(1), weakspot: G.events.slice(eventStart).some((e) => e.type === 'hit' && e.weakspot) };
+      bossHp = boss.hp;
+      eventStart = G.events.length;
+      shot(boss.z + 4, 0, boss.y + 0.6); run(0.2);
+      out.bossBodyHit = { damage: +(bossHp - boss.hp).toFixed(1), weakspot: G.events.slice(eventStart).some((e) => e.type === 'hit' && e.weakspot) };
 
       // touching the Warden hurts, and the half-second Charge warning precedes its ram
       boss.st = 'idle'; boss.cd = 100; state.noEnemies = false;
@@ -82,7 +92,7 @@ module.exports = {
     log('enemies', r);
     await page.waitForFunction(() => {
       const track = document.querySelector('.boss-track');
-      return !document.getElementById('boss-hud').hidden && track && track.getAttribute('aria-valuenow') === '99';
+      return !document.getElementById('boss-hud').hidden && track && track.getAttribute('aria-valuenow') === '97';
     }, null, { timeout: 3000 });
     const bossHealthBar = await page.evaluate(() => ({ value: document.querySelector('.boss-track').getAttribute('aria-valuenow'), label: document.getElementById('boss-health-label').textContent }));
     log('boss health bar after hit', bossHealthBar);
@@ -95,6 +105,7 @@ module.exports = {
     expect(r.bossReady.activated && r.bossReady.combatReady && r.bossReady.damageable && r.bossDamage.hp === 99 && r.bossDamage.impact, 'the Warden should become damageable at full intro and show impacts while losing health');
     expect(r.bossContactDamage === 3, 'touching the Warden should deal 3 HP contact damage');
     expect(r.bossCharge.warned && r.bossCharge.linedUpDuringTell && r.bossCharge.alignedX === 2.5 && r.bossCharge.started && r.bossCharge.laneLocked && r.bossCharge.frontReached && r.bossCharge.reverseChargeStarted && r.bossCharge.fullCross && r.bossCharge.damage === 4 && r.bossCharge.speed === 18 && r.bossCharge.lane === 25.8 && r.bossCharge.frontZ === -218 && r.bossCharge.backZ === -243.8, 'the Warden should track the player during its tell, lock the lane, and Charge across the full arena for 4 HP at 18 m/s');
-    expect(bossHealthBar.value === '99' && bossHealthBar.label === '99%', 'the boss health bar should show health lost to a shot');
+    expect(r.bossCoreHit.damage === 1.5 && r.bossCoreHit.weakspot && r.bossBodyHit.damage === 1 && !r.bossBodyHit.weakspot, 'a chest-core hit should deal 1.5x the damage of an otherwise identical body hit');
+    expect(bossHealthBar.value === '97' && bossHealthBar.label === '97%', 'the boss health bar should show health lost to body and core hits');
   },
 };

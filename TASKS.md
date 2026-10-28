@@ -30,7 +30,7 @@ Done:
 - Milestone 6, item 1: boss-door arena, deterministic Forge Warden activation, entrance and filling health bar; added one-click arena practice start and fixed review findings (branch `codex/boss-arena`; `npm test` passes)
 - Milestone 6, item 2: Warden health, contact damage, hit feedback, player-tracking full-arena Charge, and reset on death (branch `codex/boss-charge`; PR #3; `npm test` passes)
 
-In progress: nothing
+In progress: Warden chest-core weak spot: 1.5x body damage when shots hit the glowing core; regression added (`codex/boss-core`; local `npm test` blocked because Playwright Chromium is missing; PR Playtest pending)
 
 Blocked: nothing
 
