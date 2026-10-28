@@ -28,6 +28,9 @@ Done:
 - Charged shots do more damage: level 1 = 4, level 2 = 12 (a tap is 1), both adjustable in the tuning panel (branch `claude/charge-damage`)
 - Refresh fix: each published version in its own folder, publish workflow (branch `claude/fresh-deploys`)
 - Soft lock-on: shots aimed within 7° of a lockable target bend onto its nearest edge and home in at up to 90°/s; on-target shots land where aimed. Bosses lock by default; any enemy can set `e.lockOn = true / false`. Tuning → Combat has a switch and two sliders. `lockView.target` in `src/combat/shots.js` says what the reticle is locked onto (branch `claude/soft-lockon`)
+- `.gitattributes`: every text file stays on LF line endings, approved by H (branch `claude/line-endings`)
+- Core hits on the Warden (`hit` events with `weakspot: true`) get their own effect: a molten spray, a hot glow and a rising two-note crack, bigger for charged shots (branch `claude/core-hit-fx`)
+- Fix: lock-on no longer bends a shot that is already on course for its target, so a shot aimed at the core now lands on the core (before, it hit about 0.5 m low and counted as a body hit) (branch `claude/core-hit-fx`)
 
 In progress: nothing
 

@@ -7,7 +7,7 @@ import { segSolids, rayBox } from '../player/physics.js';
 import { p } from '../player/player.js';
 import { shake } from '../player/camera.js';
 import { entMin, entMax, damageEnt } from '../enemies/enemies.js';
-import { emit, burst, C_TEAL, C_WHITE, C_AMBER } from '../fx/particles.js';
+import { emit, burst, C_TEAL, C_WHITE, C_AMBER, C_MOLTEN } from '../fx/particles.js';
 import { tone, hiss } from '../fx/audio.js';
 
 defineTuning('Combat', [
@@ -120,6 +120,9 @@ function steer(s, dt) {
   const e = s.lock;
   if (!e.alive || s.hit.has(e) || !tuning.lockOn || tuning.lockOnTurn <= 0) { s.lock = null; return; }
   const mn = entMin(e), mx = entMax(e);
+  // a shot already on course for the target flies straight, so it lands exactly where it was aimed
+  // (e.g. on the Warden's core); it only turns once the target has moved out of its path
+  if (rayBox(s.x, s.y, s.z, s.vx * s.life, s.vy * s.life, s.vz * s.life, mn, mx, SHOT_STATS[s.level].r) <= 1) return;
   const tx = clamp(s.x, mn[0], mx[0]), ty = clamp(s.y, mn[1], mx[1]), tz = clamp(s.z, mn[2], mx[2]);
   let wx = tx - s.x, wy = ty - s.y, wz = tz - s.z;
   const d = Math.hypot(wx, wy, wz), speed = Math.hypot(s.vx, s.vy, s.vz);
@@ -170,7 +173,24 @@ export function updateShots(dt) {
 export function resetShots() { SHOTS.length = 0; }
 
 const shotOrbs = Array.from({ length: 40 }, () => makeOrb(0x3ad6c6));
+// core hits: a hot glow that swells out of the impact and fades in about 0.2 s
+const FLASH_LIFE = 0.2;
+const coreFlashes = Array.from({ length: 4 }, () => { const o = makeOrb(0xffd27a); o.core.visible = false; return { o, t0: -1, size: 1 }; });
+let flashNext = 0;
+function coreFlash(x, y, z, level) {
+  const f = coreFlashes[flashNext++ % coreFlashes.length];
+  f.t0 = performance.now(); f.size = level === 2 ? 3.2 : level === 1 ? 2.4 : 1.8;
+  f.o.g.position.set(x, y, z);
+}
 export function renderShots() {
+  const now = performance.now();
+  for (const f of coreFlashes) {
+    const k = (now - f.t0) / 1000 / FLASH_LIFE;
+    f.o.g.visible = f.t0 >= 0 && k <= 1;
+    if (!f.o.g.visible) continue;
+    f.o.halo.scale.setScalar(f.size * (0.55 + 0.6 * k));
+    f.o.haloM.opacity = 1 - k * k;
+  }
   const near = findLock(aimRay(), p.x, p.y + 1.42, p.z);
   lockView.target = near ? near.e : null;
   shotOrbs.forEach((o, i) => {
@@ -192,7 +212,14 @@ const sfx = {
   charge: (lvl) => tone(lvl === 2 ? 1320 : 990, lvl === 2 ? 1320 : 990, 0.08, 'triangle', 0.1),
   hit: () => tone(1600, 1200, 0.04, 'square', 0.05),
   ping: () => { tone(2600, 1900, 0.07, 'triangle', 0.09); tone(3900, 3300, 0.05, 'square', 0.025, 0.012); },
+  // a weak-spot hit: a rising two-note crack, with a low thump under charged shots
+  core: (lvl) => {
+    tone(480, 960, 0.09, 'square', 0.07); tone(1440, 1920, 0.14, 'triangle', 0.07, 0.025);
+    if (lvl > 0) { tone(170, 60, 0.2, 'sine', lvl === 2 ? 0.18 : 0.12); hiss(0.16, 5200, 1400, lvl === 2 ? 0.12 : 0.07); }
+  },
 };
+// how many hits of each kind got their effect (the combat tests read this)
+export const hitFeedback = { body: 0, core: 0, blocked: 0 };
 on('shoot', (e) => {
   burst(e.x, e.y, e.z, e.level === 2 ? 22 : e.level === 1 ? 12 : 5, e.level === 2 ? 5 : 3, e.level === 2 ? C_AMBER : C_TEAL, { up: 0.5, grav: 2, life: 0.25 });
   (e.level === 2 ? sfx.shoot2 : e.level === 1 ? sfx.shoot1 : sfx.shoot)();
@@ -205,9 +232,24 @@ on('hit', (e) => {
     const dx = p.x - e.x, dz = p.z - e.z, m = Math.hypot(dx, dz) || 1;
     burst(e.x, e.y, e.z, 12, 3.5, C_WHITE, { up: 0.9, grav: 9, life: 0.25, dirX: (dx / m) * 3, dirZ: (dz / m) * 3 });
     sfx.ping();
+    hitFeedback.blocked += 1;
+    return;
+  }
+  // a weak spot (the Warden's core): a bigger molten spray splashing back toward the player, with a white flash;
+  // it starts a little in front of the impact so the Warden's chest doesn't hide it
+  if (e.weakspot) {
+    const dx = p.x - e.x, dz = p.z - e.z, m = Math.hypot(dx, dz) || 1, ox = (dx / m) * 0.45, oz = (dz / m) * 0.45;
+    const x = e.x + ox, z = e.z + oz, n = e.level === 2 ? 40 : e.level === 1 ? 26 : 16;
+    burst(x, e.y, z, n, 6, C_MOLTEN, { up: 0.8, grav: 5, life: 0.45, dirX: ox * 4, dirZ: oz * 4 });
+    burst(x, e.y, z, Math.ceil(n / 2), 4, C_AMBER, { up: 0.6, grav: 3, life: 0.3, dirX: ox * 3, dirZ: oz * 3 });
+    burst(x, e.y, z, 8, 1.2, C_WHITE, { up: 0, grav: 0, life: 0.14 });
+    coreFlash(x, e.y, z, e.level);
+    sfx.core(e.level);
+    hitFeedback.core += 1;
     return;
   }
   burst(e.x, e.y, e.z, e.level === 2 ? 18 : 8, 4, e.level === 2 ? C_AMBER : C_WHITE, { up: 0.6, grav: 6, life: 0.3 });
   sfx.hit();
+  hitFeedback.body += 1;
 });
 on('shotwall', (e) => { burst(e.x, e.y, e.z, e.level === 2 ? 16 : 6, 3, e.level === 2 ? C_AMBER : C_TEAL, { up: 0.6, grav: 6, life: 0.25 }); });
