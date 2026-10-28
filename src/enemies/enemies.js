@@ -1,5 +1,5 @@
 // Enemies: what each kind is, their behaviour each step, enemy shots, and enemy health.
-import { ENTS, R, H, state, events, on } from '../core/world.js';
+import { ENTS, R, H, state, events } from '../core/world.js';
 import { tuning, defineTuning } from '../core/tuning.js';
 import { damp, angleDamp } from '../core/util.js';
 import { segSolids, rayBox, lineOfSight } from '../player/physics.js';
@@ -45,6 +45,15 @@ export function resetEnemies() {
   ESHOTS.length = 0;
 }
 
+export function activateBoss() {
+  const boss = ENTS.find((e) => e.kind === 'boss');
+  if (!boss || boss.activated) return false;
+  boss.alive = true; boss.activated = true; boss.damageable = false;
+  boss.hp = boss.maxHp; boss.introTimer = 0; boss.introProgress = 0;
+  boss.st = 'enter'; boss.z = boss.z0; boss.yaw = Math.PI;
+  return true;
+}
+
 // a player shot hit enemy e at (x, y, z); returns true if that destroyed it
 export function damageEnt(e, dmg, x, y, z, level) {
   if (e.kind === 'boss' && !e.damageable) return false;
@@ -58,6 +67,7 @@ export function damageEnt(e, dmg, x, y, z, level) {
 export function updateEnemies(dt) {
   const attack = tuning.enemiesFire && !state.noEnemies && p.dead <= 0 && p.returning <= 0;
   for (const e of ENTS) {
+    if (e.kind === 'boss' && !e.activated) continue;
     if (!e.alive) {
       e.timer -= dt;
       if (e.timer <= 0) { resetEnt(e); e.cd = 1.2; events.push({ type: 'entspawn', e }); }
@@ -165,11 +175,3 @@ export function updateEnemies(dt) {
     if (s.life <= 0) ESHOTS.splice(i, 1);
   }
 }
-
-on('bossdoor', () => {
-  const boss = ENTS.find((e) => e.kind === 'boss');
-  if (!boss || boss.activated) return;
-  boss.alive = true; boss.activated = true; boss.damageable = false;
-  boss.hp = boss.maxHp; boss.introTimer = 0; boss.introProgress = 0;
-  boss.st = 'enter'; boss.z = boss.z0; boss.yaw = Math.PI;
-});

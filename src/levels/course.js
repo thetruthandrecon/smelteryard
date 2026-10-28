@@ -3,6 +3,7 @@ import { CHECKPOINTS, CAPSULES, LEVEL, MAX_HP, H, state, events } from '../core/
 import { groundBelow } from '../player/physics.js';
 import { p } from '../player/player.js';
 import { hazardHit } from '../player/health.js';
+import { activateBoss } from '../enemies/enemies.js';
 
 // runs after the player and enemies, only while the player is up
 export function updateCourse() {
@@ -23,6 +24,7 @@ export function updateCourse() {
       }
       if (!door.triggered && state.started && p.y > G0.y - 0.2 && Math.abs(p.x - G0.x) < G0.xHalf && p.z < G0.triggerZ && p.z > G0.zMin - 2) {
         door.triggered = true; door.openedAt = state.worldT;
+        activateBoss();
         events.push({ type: 'bossdoor' });
       }
       if (door.triggered) {
