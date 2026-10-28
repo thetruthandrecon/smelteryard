@@ -36,6 +36,16 @@ module.exports = {
         return res;
       };
       out.pierce = { open: trial(false), blocked: trial(true) };
+      // damage per charge level, on a dummy with plenty of health (each press also fires a 1-damage tap first)
+      const big = ENTS[0];
+      const charged = (holdFor) => {
+        fresh(big); big.hp = 100;
+        placeAt({ x: -4, y: 0, z: 6 + tuning.camShoulder }); cam.yaw = Math.PI / 2; cam.pitch = 0; run(0.2);
+        input.fireQueued = true; input.fireHeld = true; run(holdFor); input.fireHeld = false;
+        run(0.5);
+        return 100 - big.hp;
+      };
+      out.damage = { level1: charged((tuning.chargeTime1 + tuning.chargeTime2) / 2), level2: charged(tuning.chargeTime2 + 0.1), expect1: 1 + tuning.chargeDamage1, expect2: 1 + tuning.chargeDamage2 };
       return out;
     });
     log('combat', r);
@@ -44,6 +54,8 @@ module.exports = {
     expect(r.shots.outFrom6Taps === 6, 'there should be no limit on shots in the air (6 quick taps = 6 shots)');
     expect(r.charge.maxLevel === 2 && r.charge.dummyDestroyed, 'a full charge should fire a level 2 shot that destroys a dummy');
     expect(r.pierce.open.frontHit && r.pierce.open.backHit, 'a full charge should pierce through to a second target');
+    expect(r.damage.level1 === r.damage.expect1 && r.damage.level2 === r.damage.expect2, 'charged shots should do the damage set in the tuning panel (level 1 and level 2)');
+    expect(r.damage.expect2 - 1 > 8, 'a full charge should beat tapping for the same 1.3 s (about 8 damage)');
     expect(r.pierce.blocked.frontHit && !r.pierce.blocked.backHit, 'a full charge should stop on a target that can\'t be hurt right now (damageable === false)');
   },
 };
