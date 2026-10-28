@@ -67,6 +67,29 @@ function makeEntityMesh(e) {
     }
     return { g, flashMats, body, wings, eyeMat, eye };
   }
+  if (e.kind === 'boss') {
+    const armor = std({ color: 0x343b42, roughness: 0.42, metalness: 0.72 });
+    const dark = std({ color: 0x1b2025, roughness: 0.62, metalness: 0.65 });
+    const bronze = std({ color: 0x8a4a22, roughness: 0.46, metalness: 0.55 });
+    const footMat = dark;
+    for (const x of [-0.62, 0.62]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.82, 0.7), dark); leg.position.set(x, 0.72, 0); leg.castShadow = true; g.add(leg);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.28, 1.02), footMat); foot.position.set(x, 0.16, -0.16); foot.castShadow = true; g.add(foot);
+    }
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.95, 2.05, 1.32), armor); torso.position.y = 2.05; torso.castShadow = true; g.add(torso);
+    for (const x of [-1.14, 1.14]) {
+      const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.88, 1.18), bronze); shoulder.position.set(x, 2.75, 0); shoulder.castShadow = true; g.add(shoulder);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.48, 1.16, 0.58), dark); arm.position.set(x, 1.7, -0.02); arm.castShadow = true; g.add(arm);
+    }
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.72, 0.9), bronze); head.position.set(0, 3.48, -0.02); head.castShadow = true; g.add(head);
+    const visorMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a, toneMapped: false });
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.12, 0.08), visorMat); visor.position.set(0, 3.5, -0.49); g.add(visor);
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xff7a1a, toneMapped: false });
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.52, 16, 12), coreMat); core.position.set(0, 2.12, -0.72); g.add(core);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.1, 8, 24), new THREE.MeshStandardMaterial({ color: 0xd7a56c, roughness: 0.34, metalness: 0.8 }));
+    rim.position.copy(core.position); g.add(rim);
+    return { g, flashMats, core, coreMat };
+  }
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 }));
   base.position.y = 0.22; g.add(base);
   const yawG = new THREE.Group(); yawG.position.y = 0.85; g.add(yawG);
@@ -101,9 +124,9 @@ export function renderEnemies() {
   ENTS.forEach((e, i) => {
     const v = entVis[i];
     if (!v) return;
-    v.g.visible = e.alive;
+    v.g.visible = e.alive && (e.kind !== 'boss' || e.activated);
     if (!e.alive) return;
-    v.g.position.set(e.x, e.y + (e.kind === 'mover' ? Math.sin(now * 3 + i) * 0.08 : 0), e.z);
+    v.g.position.set(e.x, e.y + (e.kind === 'mover' ? Math.sin(now * 3 + i) * 0.08 : e.kind === 'boss' && e.st === 'enter' ? Math.abs(Math.sin(e.phase)) * 0.06 : 0), e.z);
     const f = e.flash > 0 ? 1 : 0;
     for (const m of v.flashMats) { m.emissive.setRGB(f, f, f); m.emissiveIntensity = f * 1.5; }
     if (e.kind === 'turret') {
@@ -117,6 +140,10 @@ export function renderEnemies() {
       const sw2 = Math.sin(e.phase) * 0.6;
       v.legs[0].rotation.x = sw2; v.legs[1].rotation.x = -sw2;
       v.body.position.y = 0.8 + Math.abs(Math.cos(e.phase)) * 0.05;
+    } else if (e.kind === 'boss') {
+      v.g.rotation.y = e.yaw;
+      v.core.scale.setScalar(1 + Math.sin(now * 8) * 0.06);
+      v.coreMat.color.setRGB(1, 0.24 + Math.sin(now * 5) * 0.08, 0.04);
     } else if (e.kind === 'flyer') {
       v.g.rotation.y = e.yaw;
       const flap = Math.sin(now * (e.st === 'swoop' ? 40 : 18) + i) * 0.5;

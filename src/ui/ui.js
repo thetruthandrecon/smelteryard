@@ -1,15 +1,15 @@
 // Screens and HUD: start, pause, clear and game-over overlays, the HUD, toasts, screen flashes,
 // best times, and the UI keys (T tuning, M sound, H hide controls, R restart, Esc/P pause).
-import { MAX_HP, LEVEL, state, on } from '../core/world.js';
+import { MAX_HP, LEVEL, ENTS, CHECKPOINTS, state, on } from '../core/world.js';
 import { $, fmtTime, store } from '../core/util.js';
 import { tuning, onTuningChange } from '../core/tuning.js';
 import { loadLevel, restartCourse } from '../core/sim.js';
-import { p } from '../player/player.js';
+import { p, placeAt } from '../player/player.js';
 import { releaseAll, lockPointer, releasePointer, isPointerLocked } from '../player/input.js';
 import { ensureAudio, isMuted, setMuted } from '../fx/audio.js';
 import { refreshTuneOut } from './tuning-panel.js';
 
-const ui = { timer: $('timer'), cp: $('cp-label'), best: $('best-label'), pipDash: $('pip-dash'), pipAir: $('pip-air'), fps: $('fps'), toast: $('toast'), flash: $('flash'), reticle: $('reticle'), hp: $('hud-hp'), lives: $('lives') };
+const ui = { timer: $('timer'), cp: $('cp-label'), best: $('best-label'), pipDash: $('pip-dash'), pipAir: $('pip-air'), fps: $('fps'), toast: $('toast'), flash: $('flash'), reticle: $('reticle'), hp: $('hud-hp'), lives: $('lives'), boss: $('boss-hud'), bossFill: $('boss-fill'), bossTrack: document.querySelector('.boss-track'), bossLabel: $('boss-health-label') };
 const hpSegs = [];
 for (let i = 0; i < MAX_HP; i++) { const s = document.createElement('i'); $('hp-bar').appendChild(s); hpSegs.push(s); }
 let shownHp = -1, toastTimer = 0, hitTimer = 0, fpsFrames = 0, fpsTime = 0;
@@ -23,10 +23,14 @@ function updateBestLabel() { ui.best.textContent = state.best != null ? `Best ${
 function showOverlay(id) { for (const o of ['ov-start', 'ov-pause', 'ov-clear', 'ov-over']) $(o).hidden = o !== id; }
 
 // start or resume play; restart = from the beginning; levelId switches level first
-export function beginPlay(restart, levelId) {
+export function beginPlay(restart, levelId, checkpointIndex = 0) {
   ensureAudio();
   if (levelId && levelId !== LEVEL.id) loadLevel(levelId);
   else if (restart) restartCourse();
+  if (checkpointIndex > 0 && CHECKPOINTS[checkpointIndex]) {
+    state.cp = checkpointIndex;
+    placeAt(CHECKPOINTS[checkpointIndex]);
+  }
   showOverlay(null);
   state.mode = 'play';
   if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
@@ -52,6 +56,7 @@ export function toggleTune(force) {
   else if (state.mode === 'play') lockPointer();
 }
 $('btn-start').addEventListener('click', () => beginPlay(LEVEL.id === 'smelter' ? state.started : true, 'smelter'));
+$('btn-boss-practice').addEventListener('click', () => beginPlay(true, 'smelter', 3));
 $('btn-yard').addEventListener('click', () => beginPlay(LEVEL.id === 'yard' ? state.started : true, 'yard'));
 $('btn-resume').addEventListener('click', () => beginPlay(false));
 $('btn-restart').addEventListener('click', () => beginPlay(true));
@@ -119,6 +124,14 @@ export function updateHud(dt) {
   ui.timer.textContent = fmtTime(state.time);
   ui.cp.textContent = state.cp === 0 ? 'Start' : `Checkpoint ${state.cp} of ${LEVEL.cpCount}`;
   ui.lives.textContent = `×${state.lives}`;
+  const boss = ENTS.find((e) => e.kind === 'boss');
+  ui.boss.hidden = !boss || !boss.activated;
+  if (boss && boss.activated) {
+    const progress = Math.max(0, Math.min(1, boss.introProgress));
+    ui.bossFill.style.transform = `scaleX(${progress})`;
+    ui.bossLabel.textContent = `${Math.round(progress * 100)}%`;
+    ui.bossTrack.setAttribute('aria-valuenow', `${Math.round(progress * 100)}`);
+  }
   ui.pipDash.classList.toggle('on', p.dashTimer <= 0 && p.dashCD <= 0);
   ui.pipAir.classList.toggle('on', p.airDash);
   if (shownHp !== p.hp) {

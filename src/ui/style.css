@@ -41,6 +41,11 @@ body {
 #hp-bar i.on { background: var(--hero); box-shadow: 0 0 6px rgba(58, 214, 198, 0.55); }
 #hud-hp.low #hp-bar i.on { background: var(--molten); box-shadow: 0 0 6px rgba(255, 138, 42, 0.6); }
 #hud-hp.critical #hp-bar i.on { animation: blink 0.5s steps(2) infinite; }
+#boss-hud { top: var(--top); left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 170px)); }
+.boss-name { color: var(--molten); font-size: 13px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; }
+.boss-track { width: 100%; height: 13px; padding: 2px; border: 1px solid rgba(255, 197, 137, 0.82); background: rgba(10, 14, 19, 0.8); box-shadow: 0 0 12px rgba(255, 106, 26, 0.25); }
+.boss-track i { display: block; width: 100%; height: 100%; transform: scaleX(0); transform-origin: left center; background: linear-gradient(90deg, #ff6a1a, #ffc15c); box-shadow: 0 0 8px rgba(255, 138, 42, 0.65); transition: transform 0.08s linear; }
+.boss-health-label { color: var(--text); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; }
 .hp-label { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--muted); }
 .lives { font-size: 17px; font-weight: 700; letter-spacing: 0.04em; color: var(--text); font-variant-numeric: tabular-nums; }
 @keyframes blink { 50% { opacity: 0.25; } }
@@ -99,6 +104,8 @@ kbd { font-family: var(--font-display); font-size: 13px; font-weight: 600; min-w
   #hud-br { display: none; }
   .timer { font-size: 28px; }
   #hud-hp { top: calc(var(--top) + 92px); }
+  #boss-hud { width: min(300px, calc(100vw - 132px)); }
+  .boss-name { font-size: 11px; }
   .card { padding: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {

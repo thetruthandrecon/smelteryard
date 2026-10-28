@@ -1,7 +1,7 @@
 // Course bots: play each level from the start to the goal with enemies paused. If you change a level's
 // layout on purpose, update its route here in the same pull request.
 module.exports = {
-  name: 'Courses: both levels can be finished',
+  name: 'Courses: both level routes reach their goals',
   owner: 'Codex (levels)',
   async run({ page, expect, log }) {
     const bot = await page.evaluate(() => {
@@ -233,7 +233,9 @@ module.exports = {
       log.push(`conveyor t=${t.toFixed(1)}`);
 
       // 5. the boss door
-      if (!until(() => state.cleared, 6, center)) return fail('boss door');
+      const bossDoor = LEVEL.named.bossDoor;
+      if (!until(() => bossDoor.triggered && bossDoor.open === 1, 6, center)) return fail('boss door and arena opening');
+      if (state.cleared) return fail('stage cleared before the boss fight');
       if (state.cp !== 3) return fail('checkpoint 3');
       log.push(`boss door t=${t.toFixed(1)} timer=${state.time.toFixed(1)} falls=${state.falls} kos=${state.kos} spikes=${state.spikeHits}`);
       return done({ ok: true, log });

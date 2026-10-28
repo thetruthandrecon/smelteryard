@@ -20,6 +20,11 @@
   <div class="sub"><span id="cp-label">Start</span> · <span id="best-label">No best yet</span></div>
 </div>
 <div class="hud" id="hud-hp" aria-label="Health"><div id="hp-bar"></div><div class="hp-label">HP</div><div class="lives" id="lives" aria-label="Lives left">×3</div></div>
+<div class="hud" id="boss-hud" hidden aria-label="Boss health">
+  <div class="boss-name" id="boss-name">Forge Warden</div>
+  <div class="boss-track" role="progressbar" aria-label="Forge Warden health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="boss-fill"></i></div>
+  <div class="boss-health-label" id="boss-health-label">100%</div>
+</div>
 <div class="hud" id="hud-bl">
   <div class="pip on" id="pip-dash"><i></i>Dash</div>
   <div class="pip on" id="pip-air"><i></i>Air dash</div>
@@ -55,6 +60,7 @@
     <p class="note">Spikes and the lava take a quarter of your health and put you back at the last checkpoint. Running out of health or getting crushed costs a life; you get <span id="lives-note">3</span> per run. Gamepad: left stick moves, right stick aims, A jumps, B or RB dashes, RT or X shoots, Start pauses.</p>
     <div class="actions">
       <button class="btn" id="btn-start" type="button">Play Smelter Yard</button>
+      <button class="btn ghost" id="btn-boss-practice" type="button">Practice: boss arena</button>
       <button class="btn ghost" id="btn-yard" type="button">Test Yard</button>
       <button class="btn ghost" id="btn-start-tune" type="button">Tuning</button>
     </div>
