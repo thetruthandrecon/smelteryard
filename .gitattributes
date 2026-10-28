@@ -1,0 +1,3 @@
+# Keep every text file on LF line endings, whatever editor or system writes it.
+# Git converts CRLF to LF when a file is committed.
+* text=auto eol=lf
