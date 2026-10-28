@@ -67,7 +67,7 @@ export function defineSmelter() {
   addEnt('walker', -3.4, 25, -138, { axis: 0, min: -3.4, max: 3.4 });
   addEnt('flyer', 3, 31, -203, { range: 11 });
   addEnt('walker', -4, 28, -201, { axis: 0, min: -4, max: 4 });
-  addEnt('boss', 0, 28, -241, { entryZ: -231, entrySpeed: 3.4, introDuration: 2.4, chargeFrontZ: -222, chargeBackZ: -240 });
+  addEnt('boss', 0, 28, -241, { entryZ: -231, entrySpeed: 3.4, introDuration: 2.4, chargeFrontZ: -218, chargeBackZ: -243.8, chargeMinX: -3.55, chargeMaxX: 3.55 });
   capsule(-4, 0, -44); capsule(0, 10.4, -82.5); capsule(3, 25, -140); capsule(-3, 28, -196);
   // set dressing (no collision): pipes along the yard walls, molten vats beside the hall
   for (const [x, z0, z1] of [[-6.6, 12, -14], [6.6, 12, -14], [-6.6, -18, -34], [6.6, -18, -28.6], [-6.6, -42, -74], [6.6, -42, -74]]) DECO.push({ kind: 'pipe', x, y: 3.6, z0, z1 });

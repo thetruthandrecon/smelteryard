@@ -98,5 +98,20 @@ module.exports = {
     expect(arena.doorOpen && arena.stageStillActive && arena.bossActivated && arena.bossWalkedIn && arena.introFilled, 'opening the boss door should reveal the entering boss and fill its intro bar');
     expect(arena.bossDamageable, 'the boss should become damageable when its intro bar fills');
     expect(!bossHud.hidden && bossHud.value === '100', 'the boss health bar should stay visible and full after its intro');
+
+    const deathReset = await page.evaluate(() => {
+      const G = window.__game, boss = G.ENTS.find((e) => e.kind === 'boss'), door = G.LEVEL.named.bossDoor;
+      boss.hp = 37; boss.st = 'charge'; door.open = 1; door.triggered = true;
+      door.min[1] = door.closedMin[1] + 5.2; door.max[1] = door.closedMax[1] + 5.2;
+      G.p.dead = 0; G.p.returning = 0; G.p.iframes = 0; G.p.hp = 3;
+      G.hurt(3, 0, 1); G.step(G.STEP);
+      return {
+        playerDied: G.p.dead > 0,
+        bossReset: !boss.activated && !boss.alive && boss.hp === boss.maxHp,
+        doorClosed: door.open === 0 && !door.triggered && door.min[1] === door.closedMin[1] && door.max[1] === door.closedMax[1],
+      };
+    });
+    log('Boss arena reset after death', deathReset);
+    expect(deathReset.playerDied && deathReset.bossReset && deathReset.doorClosed, 'dying during the boss fight should reset the boss and close the arena door');
   },
 };

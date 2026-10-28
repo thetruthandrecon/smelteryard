@@ -1,5 +1,5 @@
 // Enemies: what each kind is, their behaviour each step, enemy shots, and enemy health.
-import { ENTS, R, H, state, events } from '../core/world.js';
+import { ENTS, R, H, state, events, LEVEL } from '../core/world.js';
 import { tuning, defineTuning } from '../core/tuning.js';
 import { damp, angleDamp } from '../core/util.js';
 import { segSolids, rayBox, lineOfSight } from '../player/physics.js';
@@ -21,7 +21,7 @@ export const ENT_SPEC = {
   turret: { hx: 0.5, hy: 1.2, hz: 0.5, hp: 8, respawn: 10 },
   walker: { hx: 0.55, hy: 1.15, hz: 0.55, hp: 3, respawn: 6, touch: 3 },
   flyer: { hx: 0.45, hy: 0.8, hz: 0.45, hp: 2, respawn: 6, touch: 2 },
-  boss: { hx: 1.45, hy: 3.9, hz: 1.1, hp: 100, respawn: 999999, touch: 3, chargeDamage: 4, chargeSpeed: 18 },
+  boss: { hx: 1.45, hy: 3.9, hz: 1.1, hp: 100, respawn: 999999, touch: 3, chargeDamage: 4, chargeSpeed: 18, chargeAlignSpeed: 14 },
 };
 // place an enemy in the current level (called from level definitions)
 export function addEnt(kind, x, y, z, extra = {}) {
@@ -60,9 +60,17 @@ export function activateBoss() {
   return true;
 }
 
+function resetBossEncounter(e) {
+  resetEnt(e);
+  const door = LEVEL.named.bossDoor;
+  if (door) {
+    door.open = 0; door.triggered = false; door.openedAt = 0;
+    door.min[1] = door.closedMin[1]; door.max[1] = door.closedMax[1];
+  }
+}
+
 function startBossChargeTell(e) {
   if (!e.chargeDirZ) e.chargeDirZ = Math.sign(p.z - e.z) || 1;
-  e.chargeX = e.x;
   e.chargeTargetZ = e.chargeDirZ > 0 ? e.chargeFrontZ : e.chargeBackZ;
   e.yaw = e.chargeDirZ > 0 ? Math.PI : 0;
   e.st = 'chargeTell'; e.t2 = 0.5; e.tele = 1;
@@ -70,6 +78,11 @@ function startBossChargeTell(e) {
 }
 
 function updateBoss(e, dt, attack) {
+  if (p.dead > 0) {
+    resetBossEncounter(e);
+    return;
+  }
+
   e.introTimer = Math.min(e.introDuration, e.introTimer + dt);
   e.introProgress = e.introTimer / e.introDuration;
   e.phase += dt * 3;
@@ -93,6 +106,9 @@ function updateBoss(e, dt, attack) {
   }
 
   if (e.st === 'chargeTell') {
+    const targetX = Math.max(e.chargeMinX, Math.min(e.chargeMaxX, p.x));
+    const dx = targetX - e.x, moveX = e.chargeAlignSpeed * dt;
+    e.x += Math.sign(dx) * Math.min(Math.abs(dx), moveX);
     if (e.introEntering) {
       const dz = e.entryZ - e.z, move = e.entrySpeed * dt;
       if (Math.abs(dz) <= move) { e.z = e.entryZ; e.introEntering = false; }
@@ -100,6 +116,7 @@ function updateBoss(e, dt, attack) {
     }
     e.t2 = Math.max(0, e.t2 - dt);
     if (e.t2 <= 0 && !e.introEntering) {
+      e.chargeX = e.x;
       e.st = 'charge'; e.tele = 0;
       events.push({ type: 'bosscharge', e });
     }
@@ -124,6 +141,7 @@ function updateBoss(e, dt, attack) {
         const x = (p.x + e.x) / 2, y = p.y + 1, z = (p.z + e.z) / 2;
         events.push({ type: 'touch', x, y, z, boss: true, charge: charging });
         if (charging) events.push({ type: 'bossimpact', x, y, z });
+        if (p.dead > 0) resetBossEncounter(e);
       }
     }
   }
