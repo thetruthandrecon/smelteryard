@@ -1,0 +1,147 @@
+// What enemies look like, their per-frame animation, and their effects and sounds.
+import * as THREE from '../core/three.js';
+import { ENTS, on } from '../core/world.js';
+import { canvasTex, makeOrb } from '../core/render.js';
+import { ESHOTS } from './enemies.js';
+import { emit, burst, C_TEAL, C_MOLTEN, C_WHITE, C_RED } from '../fx/particles.js';
+import { tone, hiss, near } from '../fx/audio.js';
+
+const targetTex = canvasTex(128, (g, s) => {
+  g.fillStyle = '#e7e2da'; g.fillRect(0, 0, s, s);
+  const rings = ['#ff8a2a', '#e7e2da', '#ff8a2a', '#e7e2da', '#1d0f04'];
+  rings.forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(s / 2, s / 2, s * 0.46 * (1 - i * 0.19), 0, Math.PI * 2); g.fill(); });
+  g.strokeStyle = '#3a2a1c'; g.lineWidth = 6; g.strokeRect(3, 3, s - 6, s - 6);
+});
+const postMat = new THREE.MeshStandardMaterial({ color: 0x2a3038, roughness: 0.7, metalness: 0.4 });
+function makeEntityMesh(e) {
+  const g = new THREE.Group();
+  const flashMats = [];
+  const std = (opts) => { const m = new THREE.MeshStandardMaterial(opts); flashMats.push(m); return m; };
+  if (e.kind === 'dummy' || e.kind === 'mover') {
+    const block = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), std({ map: targetTex, roughness: 0.6, metalness: 0.1 }));
+    block.castShadow = true;
+    if (e.kind === 'dummy') {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 1.05, 8), postMat); post.position.y = 0.52; g.add(post);
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.08, 12), postMat); foot.position.y = 0.04; g.add(foot);
+      block.position.y = 1.43;
+    } else {
+      block.position.y = 0.45;
+      const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.08, 0.14, 10), new THREE.MeshBasicMaterial({ color: 0x3ad6c6, toneMapped: false }));
+      jet.position.y = -0.02; g.add(jet);
+    }
+    g.add(block);
+    return { g, flashMats, block };
+  }
+  if (e.kind === 'walker') {
+    const shell = std({ color: 0x6b3218, roughness: 0.5, metalness: 0.45 });
+    const dark = std({ color: 0x23272c, roughness: 0.7, metalness: 0.5 });
+    const body = new THREE.Group(); body.position.y = 0.8; g.add(body);
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.62, 0.9), shell); hull.castShadow = true; body.add(hull);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.14, 0.12), dark); brow.position.set(0, 0.16, -0.48); body.add(brow);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff5a2a, toneMapped: false });
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.05), eyeMat); eye.position.set(0, 0.02, -0.47); body.add(eye);
+    const spikeMat = std({ color: 0xc7ccd2, roughness: 0.35, metalness: 0.8 });
+    for (const x of [-0.3, 0, 0.3]) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 6), spikeMat); s.position.set(x, 0.46, 0.05); body.add(s); }
+    const legs = [];
+    for (const x of [-0.3, 0.3]) {
+      const hip = new THREE.Group(); hip.position.set(x, 0.5, 0); g.add(hip);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.28), dark); leg.position.y = -0.25; hip.add(leg);
+      legs.push(hip);
+    }
+    return { g, flashMats, body, legs, eyeMat };
+  }
+  if (e.kind === 'flyer') {
+    const shell = std({ color: 0x2c3138, roughness: 0.45, metalness: 0.6 });
+    const body = new THREE.Group(); body.position.y = 0.4; g.add(body);
+    const hull = new THREE.Mesh(new THREE.OctahedronGeometry(0.46), shell); hull.scale.set(1.1, 0.8, 1.3); hull.castShadow = true; body.add(hull);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff5a2a, toneMapped: false });
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), eyeMat); eye.position.set(0, 0.02, -0.55); body.add(eye);
+    const wingMat = std({ color: 0xd2652a, roughness: 0.45, metalness: 0.35, side: THREE.DoubleSide });
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xff7a2a, toneMapped: false });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 6, 20), ringMat); ring.rotation.x = Math.PI / 2; ring.position.y = -0.3; body.add(ring);
+    const wings = [];
+    for (const s of [-1, 1]) {
+      const pivot = new THREE.Group(); pivot.position.set(s * 0.32, 0.05, 0); body.add(pivot);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.05, 0.55), wingMat); wing.position.x = s * 0.47; pivot.add(wing);
+      wings.push([pivot, s]);
+    }
+    return { g, flashMats, body, wings, eyeMat, eye };
+  }
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 }));
+  base.position.y = 0.22; g.add(base);
+  const yawG = new THREE.Group(); yawG.position.y = 0.85; g.add(yawG);
+  const pitchG = new THREE.Group(); yawG.add(pitchG);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.75), std({ color: 0x8a4a22, roughness: 0.5, metalness: 0.45 }));
+  pitchG.add(head);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.7, 10), std({ color: 0x23282f, roughness: 0.6, metalness: 0.6 }));
+  barrel.rotation.x = Math.PI / 2; barrel.position.set(0, -0.02, -0.6); pitchG.add(barrel);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff5a2a, toneMapped: false });
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), eyeMat); eye.position.set(0, 0.1, -0.38); pitchG.add(eye);
+  head.castShadow = true;
+  return { g, flashMats, yawG, pitchG, eye, eyeMat };
+}
+
+// called by the level builder: one model per enemy, added to the level's group
+let entVis = [];
+export function buildEnemyVisuals(group) {
+  entVis = ENTS.map((e) => { const v = makeEntityMesh(e); group.add(v.g); return v; });
+}
+
+const eshotOrbs = Array.from({ length: 24 }, () => makeOrb(0xff6a1a));
+for (const o of eshotOrbs) o.core.material.color.set(0xffd2a0);
+
+export function renderEnemies() {
+  const now = performance.now() / 1000;
+  eshotOrbs.forEach((o, i) => {
+    const s = ESHOTS[i];
+    if (!s) { o.g.visible = false; return; }
+    o.g.visible = true; o.g.position.set(s.x, s.y, s.z);
+    o.core.scale.setScalar(0.13); o.halo.scale.setScalar(0.9 + 0.15 * Math.sin(now * 30 + i));
+  });
+  ENTS.forEach((e, i) => {
+    const v = entVis[i];
+    if (!v) return;
+    v.g.visible = e.alive;
+    if (!e.alive) return;
+    v.g.position.set(e.x, e.y + (e.kind === 'mover' ? Math.sin(now * 3 + i) * 0.08 : 0), e.z);
+    const f = e.flash > 0 ? 1 : 0;
+    for (const m of v.flashMats) { m.emissive.setRGB(f, f, f); m.emissiveIntensity = f * 1.5; }
+    if (e.kind === 'turret') {
+      v.yawG.rotation.y = e.yaw;
+      v.pitchG.rotation.x = e.pitch;
+      const tele = e.tele;
+      v.eyeMat.color.setRGB(1, 0.35 + tele * 0.6, 0.15 + tele * 0.5);
+      v.eye.scale.setScalar(1 + tele * (0.8 + 0.4 * Math.sin(now * 40)));
+    } else if (e.kind === 'walker') {
+      v.g.rotation.y = e.yaw;
+      const sw2 = Math.sin(e.phase) * 0.6;
+      v.legs[0].rotation.x = sw2; v.legs[1].rotation.x = -sw2;
+      v.body.position.y = 0.8 + Math.abs(Math.cos(e.phase)) * 0.05;
+    } else if (e.kind === 'flyer') {
+      v.g.rotation.y = e.yaw;
+      const flap = Math.sin(now * (e.st === 'swoop' ? 40 : 18) + i) * 0.5;
+      for (const [pivot, s] of v.wings) pivot.rotation.z = s * flap;
+      const shake = e.st === 'tele' ? (Math.random() - 0.5) * 0.08 : 0;
+      v.body.position.set(shake, 0.4, 0);
+      v.body.rotation.x = e.st === 'swoop' ? -0.6 : 0;
+      v.eyeMat.color.setRGB(1, e.st === 'tele' ? 0.9 : 0.35, e.st === 'tele' ? 0.6 : 0.15);
+      v.eye.scale.setScalar(e.st === 'tele' ? 1.6 + 0.3 * Math.sin(now * 40) : 1);
+      if (e.st === 'swoop') emit(e.x, e.y + 0.4, e.z, 0, 0, 0, 0.25, C_MOLTEN, 0);
+    } else if (v.block) {
+      v.block.rotation.y = e.kind === 'mover' ? now * 1.2 : 0;
+    }
+  });
+}
+
+const sfx = {
+  kill: () => { hiss(0.35, 1200, 120, 0.25); tone(220, 50, 0.3, 'sine', 0.2); },
+  efire: (v) => tone(300, 160, 0.12, 'square', 0.06 * v),
+  swoop: (v) => { hiss(0.4, 600, 2600, 0.16 * v); tone(260, 520, 0.35, 'sawtooth', 0.04 * v); },
+};
+on('kill', ({ e }) => { burst(e.x, e.y + e.hy * 0.6, e.z, 40, 7, C_MOLTEN, { up: 1.2, grav: 8, life: 0.7 }); burst(e.x, e.y + e.hy * 0.6, e.z, 16, 3, C_WHITE, { up: 0.8, grav: 2, life: 0.4 }); sfx.kill(); });
+on('entspawn', ({ e }) => { burst(e.x, e.y + e.hy * 0.5, e.z, 14, 2, C_TEAL, { up: 0.5, grav: 0, life: 0.4 }); });
+on('efire', (e) => { burst(e.x, e.y, e.z, 6, 2, C_MOLTEN, { up: 0.4, grav: 2, life: 0.2 }); sfx.efire(near(e.x, e.y, e.z, 30)); });
+on('eshotwall', (e) => { burst(e.x, e.y, e.z, 8, 3, C_MOLTEN, { up: 0.6, grav: 6, life: 0.3 }); });
+on('eshothit', (e) => { burst(e.x, e.y, e.z, 14, 4, C_RED, { up: 0.8, grav: 6, life: 0.35 }); });
+on('touch', (e) => { burst(e.x, e.y, e.z, 12, 3, C_RED, { up: 0.8, grav: 6, life: 0.3 }); });
+on('swoop', ({ e }) => { sfx.swoop(near(e.x, e.y, e.z, 25)); });

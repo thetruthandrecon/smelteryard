@@ -1,10 +1,18 @@
 # Smelter Yard
 
-An original over-the-shoulder 3D action platformer that runs in the browser. H playtests; Claude and ChatGPT (Codex) build it.
+An original over-the-shoulder 3D action platformer that runs in the browser. H playtests and decides; two AIs build it: Claude (movement, camera, combat) and Codex (enemies and bosses, levels, menus and HUD, effects and sound).
 
-**Play:** open `index.html` in Chrome, or use the published link Claude shares.
+**Play:** the published link (GitHub Pages) always runs the latest `main`. Changes show up there a minute or two after a merge.
 
-**How the work flows:** each AI makes its changes on its own branch and opens a pull request. `main` only changes when a pull request is merged, and Claude then publishes it to the playable link. Instructions for the AIs are in `AGENTS.md`.
+**How a change gets in:**
+1. An AI makes it on its own branch and opens a pull request.
+2. The **Playtest** check runs the automated playtest on that pull request. Merge only when it's green.
+3. Merge it, play the link for a few minutes, and tell either AI what felt off.
+4. If a merge breaks something, press **Revert** on that pull request in GitHub.
+
+**Where things are:**
+- `TASKS.md` is the board: who's doing what, what's next, and your play-test notes.
+- `AGENTS.md` holds the rules both AIs follow.
 
 **Milestones:**
 1. Project and test room: done
