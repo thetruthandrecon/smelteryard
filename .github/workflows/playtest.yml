@@ -17,6 +17,8 @@ jobs:
         with:
           node-version: 24
       - run: npm install --no-audit --no-fund
+      - name: Check the site can be published
+        run: node tools/build-site.cjs _site check
       - run: npx playwright install --with-deps chromium
       - run: npm test
       - name: Keep the screenshots (download them from this run's summary page)
