@@ -23,6 +23,19 @@ module.exports = {
       input.fireQueued = true; input.fireHeld = true; run(tuning.chargeTime2 + 0.1); input.fireHeld = false;
       run(0.5, () => { for (const s of SHOTS) maxLevel = Math.max(maxLevel, s.level); });
       out.charge = { maxLevel, dummyDestroyed: !d1.alive };
+      // a full charge pierces a line of two dummies, but stops on one that can't be hurt right now
+      const front = ENTS[1], back = ENTS[3]; // both at x -10.5
+      const trial = (blockFront) => {
+        fresh(front, back);
+        if (blockFront) front.damageable = false;
+        placeAt({ x: -10.5 - tuning.camShoulder, y: 0, z: 9 }); cam.yaw = 0; cam.pitch = 0; run(0.2);
+        input.fireQueued = true; input.fireHeld = true; run(tuning.chargeTime2 + 0.1); input.fireHeld = false;
+        run(0.6);
+        const res = { frontHit: front.hp < front.maxHp || !front.alive, backHit: back.hp < back.maxHp || !back.alive };
+        delete front.damageable;
+        return res;
+      };
+      out.pierce = { open: trial(false), blocked: trial(true) };
       return out;
     });
     log('combat', r);
@@ -30,5 +43,7 @@ module.exports = {
     expect(r.shots.killedAfterThree, 'three taps should destroy a dummy');
     expect(r.shots.outFrom6Taps === 6, 'there should be no limit on shots in the air (6 quick taps = 6 shots)');
     expect(r.charge.maxLevel === 2 && r.charge.dummyDestroyed, 'a full charge should fire a level 2 shot that destroys a dummy');
+    expect(r.pierce.open.frontHit && r.pierce.open.backHit, 'a full charge should pierce through to a second target');
+    expect(r.pierce.blocked.frontHit && !r.pierce.blocked.backHit, 'a full charge should stop on a target that can\'t be hurt right now (damageable === false)');
   },
 };

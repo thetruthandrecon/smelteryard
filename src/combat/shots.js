@@ -85,7 +85,9 @@ export function updateShots(dt) {
     for (const [t, e] of hits) {
       s.hit.add(e);
       const kill = damageEnt(e, st.dmg, s.x + dx * t, s.y + dy * t, s.z + dz * t, s.level);
-      if (!st.pierce && !(s.level === 1 && kill)) { stopped = true; break; }
+      // a target that can't be hurt right now (e.damageable === false, e.g. a boss during its intro)
+      // stops every shot, even a piercing full charge
+      if (e.damageable === false || (!st.pierce && !(s.level === 1 && kill))) { stopped = true; break; }
     }
     if (stopped) { SHOTS.splice(i, 1); continue; }
     if (tWall <= 1) {
@@ -118,6 +120,7 @@ const sfx = {
   shoot2: () => { tone(420, 120, 0.32, 'sawtooth', 0.12); hiss(0.3, 3000, 400, 0.18); tone(900, 200, 0.25, 'square', 0.05); },
   charge: (lvl) => tone(lvl === 2 ? 1320 : 990, lvl === 2 ? 1320 : 990, 0.08, 'triangle', 0.1),
   hit: () => tone(1600, 1200, 0.04, 'square', 0.05),
+  ping: () => { tone(2600, 1900, 0.07, 'triangle', 0.09); tone(3900, 3300, 0.05, 'square', 0.025, 0.012); },
 };
 on('shoot', (e) => {
   burst(e.x, e.y, e.z, e.level === 2 ? 22 : e.level === 1 ? 12 : 5, e.level === 2 ? 5 : 3, e.level === 2 ? C_AMBER : C_TEAL, { up: 0.5, grav: 2, life: 0.25 });
@@ -125,5 +128,15 @@ on('shoot', (e) => {
   if (e.level === 2) shake(0.12);
 });
 on('charge', (e) => { sfx.charge(e.level); burst(p.x, p.y + 1.2, p.z, e.level === 2 ? 24 : 14, 3, e.level === 2 ? C_AMBER : C_TEAL, { up: 0.6, grav: 0, life: 0.35 }); });
-on('hit', (e) => { burst(e.x, e.y, e.z, e.level === 2 ? 18 : 8, 4, e.level === 2 ? C_AMBER : C_WHITE, { up: 0.6, grav: 6, life: 0.3 }); sfx.hit(); });
+on('hit', (e) => {
+  // blocked (the target can't be hurt right now): a metallic ping and sparks glancing back toward the player
+  if (e.blocked) {
+    const dx = p.x - e.x, dz = p.z - e.z, m = Math.hypot(dx, dz) || 1;
+    burst(e.x, e.y, e.z, 12, 3.5, C_WHITE, { up: 0.9, grav: 9, life: 0.25, dirX: (dx / m) * 3, dirZ: (dz / m) * 3 });
+    sfx.ping();
+    return;
+  }
+  burst(e.x, e.y, e.z, e.level === 2 ? 18 : 8, 4, e.level === 2 ? C_AMBER : C_WHITE, { up: 0.6, grav: 6, life: 0.3 });
+  sfx.hit();
+});
 on('shotwall', (e) => { burst(e.x, e.y, e.z, e.level === 2 ? 16 : 6, 3, e.level === 2 ? C_AMBER : C_TEAL, { up: 0.6, grav: 6, life: 0.25 }); });
