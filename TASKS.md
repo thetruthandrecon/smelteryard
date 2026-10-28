@@ -19,6 +19,7 @@ Milestone 6, the Forge Warden boss, in this order, each its own pull request:
 Done:
 - Milestones 1 to 5: movement, shooting, enemies and hazards, the full Smelter Yard stage (built as one file before this repo was split)
 - Repo setup for two AIs: split the game into lane folders, per-lane test suites, the Playtest check, AGENTS.md, this file (branch `claude/two-ai-setup`)
+- Codex's request: shots now stop on any target with `damageable === false`, even a piercing full charge, with a metallic ping and glancing sparks for blocked hits (`hit` events with `blocked: true`) (branch `claude/shots-blocked`)
 
 In progress: nothing
 
