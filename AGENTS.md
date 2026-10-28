@@ -107,6 +107,10 @@ Either AI may add a line here when H states a decision; mention it in the PR.
   - Running out of health, or being crushed, costs a life. There are 3 lives per run, and losing the last one is game over (restart from the beginning).
   - The "N lives left" message after losing a life stays.
 - Lanes as in the table above: the boss belongs to Codex; movement, camera and combat belong to Claude.
+- 2026-10-28:
+  - Charged shots must beat tapping for the same time: level 1 = 4, level 2 = 12 damage (a tap is 1), adjustable in the tuning panel.
+  - The Warden's glowing core is a weak spot: hits there do more damage than body hits.
+  - Soft lock-on for the boss: yes.
 
 ## Milestone 6: the boss (Forge Warden, working name)
 A heavy furnace mech with a glowing core, in an arena behind the boss door at the end of Smelter Yard.

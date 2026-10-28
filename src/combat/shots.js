@@ -13,15 +13,20 @@ defineTuning('Combat', [
   ['chargeTime1', 'Charge to level 1', 0.45, 0.2, 1, 0.05, 's'],
   ['chargeTime2', 'Charge to level 2', 1.3, 0.6, 2.5, 0.05, 's'],
   ['shotSpeed', 'Shot speed', 45, 20, 80, 1, 'm/s'],
+  // a full charge takes 1.3 s, in which tapping does about 8 damage, so charging has to beat that
+  ['chargeDamage1', 'Charge level 1 damage', 4, 1, 10, 1, ''],
+  ['chargeDamage2', 'Charge level 2 damage', 12, 2, 30, 1, ''],
 ]);
 
 export const SHOTS = [];
-// per charge level: hit radius, damage, passes through enemies, speed multiplier
+// per charge level: hit radius, passes through enemies, speed multiplier
 export const SHOT_STATS = [
-  { r: 0.16, dmg: 1, pierce: false, speed: 1 },
-  { r: 0.36, dmg: 3, pierce: false, speed: 1.08 },
-  { r: 0.62, dmg: 6, pierce: true, speed: 1.15 },
+  { r: 0.16, pierce: false, speed: 1 },
+  { r: 0.36, pierce: false, speed: 1.08 },
+  { r: 0.62, pierce: true, speed: 1.15 },
 ];
+// a tap does 1 damage; charged shots use the tuning panel values
+export const shotDamage = (level) => (level === 2 ? tuning.chargeDamage2 : level === 1 ? tuning.chargeDamage1 : 1);
 
 // the line from the camera's shoulder point through the reticle
 export function aimRay() {
@@ -84,7 +89,7 @@ export function updateShots(dt) {
     let stopped = false;
     for (const [t, e] of hits) {
       s.hit.add(e);
-      const kill = damageEnt(e, st.dmg, s.x + dx * t, s.y + dy * t, s.z + dz * t, s.level);
+      const kill = damageEnt(e, shotDamage(s.level), s.x + dx * t, s.y + dy * t, s.z + dz * t, s.level);
       // a target that can't be hurt right now (e.damageable === false, e.g. a boss during its intro)
       // stops every shot, even a piercing full charge
       if (e.damageable === false || (!st.pierce && !(s.level === 1 && kill))) { stopped = true; break; }
