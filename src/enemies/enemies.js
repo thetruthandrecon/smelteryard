@@ -35,6 +35,15 @@ export const entMin = (e) => [e.x - e.hx, e.y, e.z - e.hz];
 export const entMax = (e) => [e.x + e.hx, e.y + e.hy, e.z + e.hz];
 
 export const ESHOTS = [];
+const BOSS_CORE = { x: 0, y: 2.12, z: -0.72, radius: 0.52 };
+const SHOT_RADII = [0.16, 0.36, 0.62];
+
+function isBossCoreHit(e, x, y, z, level) {
+  const radius = BOSS_CORE.radius + (SHOT_RADII[level] ?? 0);
+  const dx = x - (e.x + BOSS_CORE.z * Math.sin(e.yaw)), dy = y - (e.y + BOSS_CORE.y), dz = z - (e.z + BOSS_CORE.z * Math.cos(e.yaw));
+  return dx * dx + dy * dy + dz * dz <= radius * radius;
+}
+
 export function resetEnt(e) {
   e.x = e.x0; e.y = e.y0; e.z = e.z0; e.alive = e.kind !== 'boss'; e.hp = e.maxHp; e.timer = 0; e.flash = 0; e.cd = 1; e.tele = 0;
   e.st = 'hover'; e.t = 0; e.t2 = 0; e.dir = e.dir0; e.yaw = e.yaw0; e.vx = e.vy = e.vz = 0;
@@ -154,9 +163,11 @@ export function damageEnt(e, dmg, x, y, z, level) {
     events.push({ type: 'hit', x, y, z, kill: false, level, blocked: true });
     return false;
   }
-  e.hp -= dmg; e.flash = 0.12;
+  const weakspot = e.kind === 'boss' && isBossCoreHit(e, x, y, z, level);
+  const damage = weakspot ? dmg * 1.5 : dmg;
+  e.hp -= damage; e.flash = 0.12;
   const kill = e.hp <= 0;
-  events.push({ type: 'hit', x, y, z, kill, level });
+  events.push({ type: 'hit', x, y, z, kill, level, weakspot, damage });
   if (kill) { e.alive = false; e.timer = e.respawn; state.kills += 1; events.push({ type: 'kill', e }); }
   return kill;
 }
