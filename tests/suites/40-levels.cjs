@@ -51,15 +51,41 @@ module.exports = {
       const { MPA, MPB, MPC } = LEVEL.named;
       const at = (t) => { state.worldT = t; step(STEP); };
       G.restartCourse(); at(2.5 - STEP); out.cycle = { aFar: +MPA.cz.toFixed(2) }; at(2.95 - STEP); out.cycle.bMid = +MPB.cx.toFixed(2); at(5.6 - STEP); out.cycle.cLowTop = +MPC.max[1].toFixed(2);
-      // walking into the boss door clears the stage
-      G.restartCourse(); state.noEnemies = true; state.cp = 3; placeAt({ x: 0, y: 28, z: -209 }); input.moveY = 1; run(1.5); input.moveY = 0;
-      out.door = { cleared: state.cleared, z: +p.z.toFixed(2) };
+      // reaching the boss door opens it into the arena instead of clearing the stage
+      G.restartCourse(); state.noEnemies = true; state.cp = 3; state.started = true;
+      Object.assign(input, { moveX: 0, moveY: 0, jumpHeld: false, dashHeld: false, fireHeld: false });
+      placeAt({ x: 0, y: 28, z: -211.2 }); step(STEP);
+      const door = LEVEL.named.bossDoor;
+      out.door = { triggered: door.triggered, open: door.open, cleared: state.cleared };
       return out;
     });
     log('Smelter Yard pieces', sm);
     expect(sm.checkpoints === 3, 'Smelter Yard should have 3 checkpoints');
     expect(sm.belt.grounded && Math.abs(sm.belt.pushed - 1.75) < 0.1 && sm.belt.offEdgeIsLava && sm.belt.leanHolds, 'conveyor belt: push 3.5 m/s, lava off the edge, leaning holds you');
     expect(Math.abs(sm.cycle.aFar + 176.5) < 0.05 && Math.abs(sm.cycle.bMid) < 0.05 && Math.abs(sm.cycle.cLowTop - 25) < 0.05, 'the three conveyor platforms should stay in sync');
-    expect(sm.door.cleared, 'walking into the boss door should end the stage');
+    expect(sm.door.triggered && !sm.door.cleared, 'reaching the boss door should trigger the arena without clearing the stage');
+
+    await page.waitForTimeout(40); // let the frame loop dispatch the boss-door event
+    const arena = await page.evaluate(() => {
+      const G = window.__game; const boss = G.ENTS.find((e) => e.kind === 'boss');
+      window.__t.run(3.1);
+      return {
+        doorOpen: G.LEVEL.named.bossDoor.open === 1,
+        stageStillActive: !G.state.cleared,
+        bossActivated: boss.activated,
+        bossWalkedIn: boss.z > boss.z0,
+        introFilled: boss.introProgress === 1,
+        bossNotDamageable: !boss.damageable,
+      };
+    });
+    await page.waitForFunction(() => {
+      const track = document.querySelector('.boss-track');
+      return !document.getElementById('boss-hud').hidden && track && track.getAttribute('aria-valuenow') === '100';
+    }, null, { timeout: 10000 });
+    const bossHud = await page.evaluate(() => ({ hidden: document.getElementById('boss-hud').hidden, value: document.querySelector('.boss-track').getAttribute('aria-valuenow') }));
+    log('Boss arena intro', { ...arena, bossHud });
+    expect(arena.doorOpen && arena.stageStillActive && arena.bossActivated && arena.bossWalkedIn && arena.introFilled, 'opening the boss door should reveal the entering boss and fill its intro bar');
+    expect(arena.bossNotDamageable, 'the arena placeholder should stay non-combat until the next boss task');
+    expect(!bossHud.hidden && bossHud.value === '100', 'the boss health bar should stay visible and full after its intro');
   },
 };

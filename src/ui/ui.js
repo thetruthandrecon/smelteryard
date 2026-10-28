@@ -1,6 +1,6 @@
 // Screens and HUD: start, pause, clear and game-over overlays, the HUD, toasts, screen flashes,
 // best times, and the UI keys (T tuning, M sound, H hide controls, R restart, Esc/P pause).
-import { MAX_HP, LEVEL, state, on } from '../core/world.js';
+import { MAX_HP, LEVEL, ENTS, state, on } from '../core/world.js';
 import { $, fmtTime, store } from '../core/util.js';
 import { tuning, onTuningChange } from '../core/tuning.js';
 import { loadLevel, restartCourse } from '../core/sim.js';
@@ -9,7 +9,7 @@ import { releaseAll, lockPointer, releasePointer, isPointerLocked } from '../pla
 import { ensureAudio, isMuted, setMuted } from '../fx/audio.js';
 import { refreshTuneOut } from './tuning-panel.js';
 
-const ui = { timer: $('timer'), cp: $('cp-label'), best: $('best-label'), pipDash: $('pip-dash'), pipAir: $('pip-air'), fps: $('fps'), toast: $('toast'), flash: $('flash'), reticle: $('reticle'), hp: $('hud-hp'), lives: $('lives') };
+const ui = { timer: $('timer'), cp: $('cp-label'), best: $('best-label'), pipDash: $('pip-dash'), pipAir: $('pip-air'), fps: $('fps'), toast: $('toast'), flash: $('flash'), reticle: $('reticle'), hp: $('hud-hp'), lives: $('lives'), boss: $('boss-hud'), bossFill: $('boss-fill'), bossTrack: document.querySelector('.boss-track'), bossLabel: $('boss-health-label') };
 const hpSegs = [];
 for (let i = 0; i < MAX_HP; i++) { const s = document.createElement('i'); $('hp-bar').appendChild(s); hpSegs.push(s); }
 let shownHp = -1, toastTimer = 0, hitTimer = 0, fpsFrames = 0, fpsTime = 0;
@@ -119,6 +119,14 @@ export function updateHud(dt) {
   ui.timer.textContent = fmtTime(state.time);
   ui.cp.textContent = state.cp === 0 ? 'Start' : `Checkpoint ${state.cp} of ${LEVEL.cpCount}`;
   ui.lives.textContent = `×${state.lives}`;
+  const boss = ENTS.find((e) => e.kind === 'boss');
+  ui.boss.hidden = !boss || !boss.activated;
+  if (boss && boss.activated) {
+    const progress = Math.max(0, Math.min(1, boss.introProgress));
+    ui.bossFill.style.transform = `scaleX(${progress})`;
+    ui.bossLabel.textContent = `${Math.round(progress * 100)}%`;
+    ui.bossTrack.setAttribute('aria-valuenow', `${Math.round(progress * 100)}`);
+  }
   ui.pipDash.classList.toggle('on', p.dashTimer <= 0 && p.dashCD <= 0);
   ui.pipAir.classList.toggle('on', p.airDash);
   if (shownHp !== p.hp) {

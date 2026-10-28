@@ -76,7 +76,7 @@ const fontsReady = Promise.race([document.fonts ? document.fonts.load('600 54px 
 // everything that belongs to the current level lives in one group, rebuilt on a level change
 let levelGroup = null;
 let dynVis = [], capVis = [], cpVis = [];
-const LV = { goalGem: null, goalBeam: null, doorGlow: null };
+const LV = { goalGem: null, goalBeam: null, doorGlow: null, doorPanels: [] };
 export function buildLevelVisuals() {
   if (levelGroup) {
     scene.remove(levelGroup);
@@ -84,6 +84,7 @@ export function buildLevelVisuals() {
   }
   const grp = new THREE.Group();
   levelGroup = grp;
+  LV.doorPanels = [];
   scene.add(grp);
   const edgePts = [];
   const spikeCones = [];
@@ -102,6 +103,7 @@ export function buildLevelVisuals() {
     m.position.set((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2);
     m.castShadow = true; m.receiveShadow = true;
     grp.add(m);
+    if (b.kind === 'door' && b.closedMin) LV.doorPanels.push({ b, mesh: m });
     if (b.kind !== 'door') topEdges(edgePts, b.min[0], b.min[2], b.max[0], b.max[2], b.max[1] + 0.012);
   }
   {
@@ -173,7 +175,7 @@ export function buildLevelVisuals() {
     LV.goalBeam.position.set(G0.x, G0.y + 30, G0.z);
     grp.add(LV.goalGem, LV.goalBeam);
   } else {
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a, toneMapped: false });
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a, transparent: true, toneMapped: false });
     const frame = new THREE.Group();
     for (const [x, y, w, h] of [[-1.92, 30.5, 0.12, 5], [1.92, 30.5, 0.12, 5], [0, 32.92, 3.96, 0.12]]) { const bar = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), glowMat); bar.position.set(x, y, -214.55); frame.add(bar); }
     grp.add(frame);
@@ -233,8 +235,12 @@ export function renderLevel(dt) {
     }
   });
   beltTex.offset.x -= dt * 3.5 * tuning.beltSpeed / 2;
+  for (const d of LV.doorPanels) {
+    d.mesh.position.y = (d.b.min[1] + d.b.max[1]) / 2;
+    d.mesh.visible = d.b.open < 0.97;
+  }
   if (LV.goalGem) { LV.goalGem.rotation.y += dt * 1.4; LV.goalGem.position.y = LEVEL.goal.y + 1.6 + Math.sin(now * 2) * 0.15; }
-  if (LV.doorGlow) { const k = 0.6 + 0.4 * Math.sin(now * 3); LV.doorGlow.color.setRGB(1, 0.3 + 0.2 * k, 0.08 * k); }
+  if (LV.doorGlow) { const k = 0.6 + 0.4 * Math.sin(now * 3); LV.doorGlow.color.setRGB(1, 0.3 + 0.2 * k, 0.08 * k); LV.doorGlow.opacity = 1 - (LEVEL.named.bossDoor?.open || 0); }
   for (const v of cpVis) if (v) v.ring.rotation.z += dt * 0.8;
 }
 // show checkpoints 1..n as reached (used when the page reloads mid-run)

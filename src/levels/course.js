@@ -13,6 +13,26 @@ export function updateCourse() {
     if (p.z <= c.z + 0.5 && Math.abs(p.x - c.x) < 6 && p.y > c.y - 0.6 && p.y < c.y + 5) { state.cp = i; events.push({ type: 'checkpoint', i }); }
   }
   const G0 = LEVEL.goal;
+  if (G0.kind === 'door') {
+    const door = LEVEL.named.bossDoor;
+    if (door) {
+      // A fresh run closes the arena gate again. resetEnemies() handles the boss itself.
+      if (!state.started) {
+        door.open = 0; door.triggered = false; door.openedAt = 0;
+        door.min[1] = door.closedMin[1]; door.max[1] = door.closedMax[1];
+      }
+      if (!door.triggered && state.started && p.y > G0.y - 0.2 && Math.abs(p.x - G0.x) < G0.xHalf && p.z < G0.triggerZ && p.z > G0.zMin - 2) {
+        door.triggered = true; door.openedAt = state.worldT;
+        events.push({ type: 'bossdoor' });
+      }
+      if (door.triggered) {
+        door.open = Math.max(0, Math.min(1, (state.worldT - door.openedAt) / 1.3));
+        const lift = 5.2 * door.open;
+        door.min[1] = door.closedMin[1] + lift; door.max[1] = door.closedMax[1] + lift;
+      }
+    }
+    return;
+  }
   if (!state.cleared && p.y > G0.y - 0.2 && Math.abs(p.x - G0.x) < G0.xHalf && p.z < G0.zMax && p.z > G0.zMin) {
     state.cleared = true; state.timing = false;
     events.push({ type: 'clear' });

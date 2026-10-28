@@ -43,10 +43,18 @@ export function defineSmelter() {
   box(-5, 5, 26, 28, -188.5, -216);
   box(-6, -5, 26, 31, -188.5, -216, 'wall'); box(5, 6, 26, 31, -188.5, -216, 'wall');
   box(-5, -2, 28, 35, -214, -216, 'wall'); box(2, 5, 28, 35, -214, -216, 'wall'); box(-2, 2, 33, 35, -214, -216, 'wall');
-  box(-2, 2, 28, 33, -214.6, -215.4, 'door');
+  const bossDoor = box(-2, 2, 28, 33, -214.6, -215.4, 'door');
+  bossDoor.closedMin = bossDoor.min.slice(); bossDoor.closedMax = bossDoor.max.slice();
+  bossDoor.open = 0; bossDoor.triggered = false; bossDoor.openedAt = 0;
+  LEVEL.named.bossDoor = bossDoor;
+  // The arena starts just beyond the door. Keep the approach floor continuous with the room.
+  box(-5, 5, 26, 28, -216, -246);
+  box(-6, -5, 28, 37, -216, -246, 'wall'); box(5, 6, 28, 37, -216, -246, 'wall');
+  box(-6, 6, 28, 37, -245, -246, 'wall');
+  box(-6, 6, 37, 39, -216, -246, 'wall');
   checkpoint(0, 0, 6); checkpoint(0, 25, -93.5); checkpoint(0, 25, -146); checkpoint(0, 28, -192);
-  LEVEL.goal = { kind: 'door', x: 0, y: 28, z: -213, xHalf: 2.6, zMin: -214.7, zMax: -211.8 };
-  LEVEL.path = [12, -216];
+  LEVEL.goal = { kind: 'door', x: 0, y: 28, z: -213, xHalf: 2.6, zMin: -214.7, zMax: -211.8, triggerZ: -211 };
+  LEVEL.path = [12, -246];
   sign('SMELTER YARD', 0, 6.2, -13); sign('FURNACE SHAFT', 5.2, 6.5, -71); sign('CRUSHER HALL', 5.6, 28.5, -95);
   sign('LAVA CONVEYOR', 5.6, 28.5, -149); sign('BOSS', 0, 36.2, -213.6);
   addEnt('walker', -4.5, 0, -23, { axis: 0, min: -4.5, max: 4.5 });
@@ -59,6 +67,7 @@ export function defineSmelter() {
   addEnt('walker', -3.4, 25, -138, { axis: 0, min: -3.4, max: 3.4 });
   addEnt('flyer', 3, 31, -203, { range: 11 });
   addEnt('walker', -4, 28, -201, { axis: 0, min: -4, max: 4 });
+  addEnt('boss', 0, 28, -241, { entryZ: -231, entrySpeed: 3.4, introDuration: 2.4 });
   capsule(-4, 0, -44); capsule(0, 10.4, -82.5); capsule(3, 25, -140); capsule(-3, 28, -196);
   // set dressing (no collision): pipes along the yard walls, molten vats beside the hall
   for (const [x, z0, z1] of [[-6.6, 12, -14], [6.6, 12, -14], [-6.6, -18, -34], [6.6, -18, -28.6], [-6.6, -42, -74], [6.6, -42, -74]]) DECO.push({ kind: 'pipe', x, y: 3.6, z0, z1 });

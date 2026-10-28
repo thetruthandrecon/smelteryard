@@ -1,5 +1,5 @@
 // Enemies: what each kind is, their behaviour each step, enemy shots, and enemy health.
-import { ENTS, R, H, state, events } from '../core/world.js';
+import { ENTS, R, H, state, events, on } from '../core/world.js';
 import { tuning, defineTuning } from '../core/tuning.js';
 import { damp, angleDamp } from '../core/util.js';
 import { segSolids, rayBox, lineOfSight } from '../player/physics.js';
@@ -21,6 +21,7 @@ export const ENT_SPEC = {
   turret: { hx: 0.5, hy: 1.2, hz: 0.5, hp: 8, respawn: 10 },
   walker: { hx: 0.55, hy: 1.15, hz: 0.55, hp: 3, respawn: 6, touch: 3 },
   flyer: { hx: 0.45, hy: 0.8, hz: 0.45, hp: 2, respawn: 6, touch: 2 },
+  boss: { hx: 1.45, hy: 3.9, hz: 1.1, hp: 100, respawn: 999999 },
 };
 // place an enemy in the current level (called from level definitions)
 export function addEnt(kind, x, y, z, extra = {}) {
@@ -35,8 +36,9 @@ export const entMax = (e) => [e.x + e.hx, e.y + e.hy, e.z + e.hz];
 
 export const ESHOTS = [];
 export function resetEnt(e) {
-  e.x = e.x0; e.y = e.y0; e.z = e.z0; e.alive = true; e.hp = e.maxHp; e.timer = 0; e.flash = 0; e.cd = 1; e.tele = 0;
+  e.x = e.x0; e.y = e.y0; e.z = e.z0; e.alive = e.kind !== 'boss'; e.hp = e.maxHp; e.timer = 0; e.flash = 0; e.cd = 1; e.tele = 0;
   e.st = 'hover'; e.t = 0; e.t2 = 0; e.dir = e.dir0; e.yaw = e.yaw0; e.vx = e.vy = e.vz = 0;
+  if (e.kind === 'boss') { e.activated = false; e.damageable = false; e.introTimer = 0; e.introProgress = 0; e.phase = 0; }
 }
 export function resetEnemies() {
   for (const e of ENTS) resetEnt(e);
@@ -45,6 +47,7 @@ export function resetEnemies() {
 
 // a player shot hit enemy e at (x, y, z); returns true if that destroyed it
 export function damageEnt(e, dmg, x, y, z, level) {
+  if (e.kind === 'boss' && !e.damageable) return false;
   e.hp -= dmg; e.flash = 0.12;
   const kill = e.hp <= 0;
   events.push({ type: 'hit', x, y, z, kill, level });
@@ -61,7 +64,19 @@ export function updateEnemies(dt) {
       continue;
     }
     e.flash = Math.max(0, e.flash - dt);
-    if (e.kind === 'mover') {
+    if (e.kind === 'boss') {
+      if (!e.activated) continue;
+      e.introTimer = Math.min(e.introDuration, e.introTimer + dt);
+      e.introProgress = e.introTimer / e.introDuration;
+      e.phase += dt * 3;
+      if (e.st === 'enter') {
+        const dz = e.entryZ - e.z, move = e.entrySpeed * dt;
+        e.yaw = Math.PI;
+        if (Math.abs(dz) <= move) { e.z = e.entryZ; e.st = 'idle'; }
+        else e.z += Math.sign(dz) * move;
+      }
+      continue;
+    } else if (e.kind === 'mover') {
       e.z += e.dir * e.speed * dt;
       if (e.z > e.zMax) { e.z = e.zMax; e.dir = -1; } else if (e.z < e.zMin) { e.z = e.zMin; e.dir = 1; }
     } else if (e.kind === 'walker') {
@@ -150,3 +165,11 @@ export function updateEnemies(dt) {
     if (s.life <= 0) ESHOTS.splice(i, 1);
   }
 }
+
+on('bossdoor', () => {
+  const boss = ENTS.find((e) => e.kind === 'boss');
+  if (!boss || boss.activated) return;
+  boss.alive = true; boss.activated = true; boss.damageable = false;
+  boss.hp = boss.maxHp; boss.introTimer = 0; boss.introProgress = 0;
+  boss.st = 'enter'; boss.z = boss.z0; boss.yaw = Math.PI;
+});
