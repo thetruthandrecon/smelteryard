@@ -1,0 +1,28 @@
+# Runs the automated playtest on every pull request and on main.
+# The check shows on each pull request; merge only when it is green.
+name: Playtest
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  playtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - name: Keep the screenshots (download them from this run's summary page)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: tests/shots/
+          retention-days: 14

@@ -1,62 +1,102 @@
-# Smelter Yard: instructions for AI agents
+# AGENTS.md
 
-This repository is worked on by two AI agents, Claude (Anthropic) and Codex/ChatGPT (OpenAI). The owner, H, playtests and decides. Read this whole file before changing anything.
+Two AI developers, Claude (Anthropic) and Codex (OpenAI), build this game in one repo. H, the owner, is the only person who merges, playtests and sets direction. The AIs can't talk to each other; this file (rules, architecture) and `TASKS.md` (ownership, status, next steps) are the only channel. Read both before doing anything.
 
-## How we work together
-- `main` is the version H plays. Never push straight to `main`.
-- Each change goes on its own branch, named for the agent and the task, e.g. `codex/boss-slag-lob` or `claude/boss-arena`. Open a pull request into `main`.
-- Keep pull requests to one task each and say in the description what changed and how you tested it. H or Claude merges them.
-- Before starting, pull the latest `main`. If another agent's open pull request touches the same area, coordinate through H instead of building on top of it.
-- After a merge, Claude publishes `main` to the playable link H uses.
+## Game
+An original over-the-shoulder 3D action platformer in the spirit of Mega Man X5: run, dash, wall-jump, charge shot, one stage (Smelter Yard), then one boss.
+- Own hero, enemies, names and world. No Capcom names, characters, art, music or sounds, even as placeholders.
+- H plays in short sessions between work calls and doesn't write code.
 
-## Files
-- `index.html` is the whole game (see the rules below).
-- `tests/run.cjs` is the automated playtest. Run it before every pull request: `npm install`, then `npx playwright install chromium`, then `npm test`. It must end with `PASS`. Screenshots go to `tests/shots/` (not committed).
-  - The bots play both levels start to finish with enemies paused, using the `window.__game` hook. If you change level geometry on purpose, update the bot's route in the same pull request.
-- `README.md` is for H.
+## Stack and how to run
+- Plain JavaScript ES modules and Three.js r169. There is no build step and no framework.
+- **Play:** serve the repo folder over http and open `index.html`; the published link (GitHub Pages) does this. Opening the file straight from disk won't work, because browsers block module imports from `file://`.
+- **Test:** `npm install`, then `npx playwright install chromium`, then `npm test`. It must end with `PASS`. Run one suite with `npm test -- levels` (any part of a suite's file name). Screenshots go to `tests/shots/` (not committed).
+- **The GitHub check "Playtest"** runs `npm test` on every pull request. If you can't run the tests in your own environment, say so in the PR and point to that check.
 
-## What it is
-An original over-the-shoulder 3D action platformer in the style of the Mega Man X games, but with its own hero, enemies and stage. It is one self-contained HTML file using Three.js r169, loaded from `https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js`, with no other assets.
-- Open `index.html` in Chrome to play.
-- The owner, H, playtests and gives feedback; he doesn't write code.
-- The build follows a 7-milestone plan:
-  - Milestones 1 to 5 are done: movement, shooting, enemies and hazards, and the full Smelter Yard stage up to the boss door.
-  - **Next is milestone 6, the boss fight** (see the end of these notes).
+## Folder map and lanes
+Each lane is a set of files that only its owner edits.
 
-## Rules for changes
-- Keep the game one HTML file (`index.html`). The only allowed external sources are Three.js from jsdelivr (exact version) and Google Fonts. Everything else is drawn in code: textures on canvases, sound with WebAudio.
-- Collision is custom: axis-aligned boxes against a capsule-ish player box. There is no physics engine. Don't add one.
-- The simulation runs at a fixed 120 Hz step (`step(dt)` with `STEP = 1/120`) and rendering interpolates between steps. Keep the game logic deterministic and inside `step`, separate from rendering.
-- Keep the `window.__game` test hook and its fields; the automated playtest uses them.
-- Wrap all `localStorage` access in try/catch (the `store` helper already does).
-- Add a check to `tests/run.cjs` for any new mechanic, in the same style as the existing ones.
+| Folder or file | What lives there | Owner |
+|---|---|---|
+| `src/player/` | movement (`player.js`), collision (`physics.js`), health and lives (`health.js`), camera (`camera.js`), controls (`input.js`), hero model and animation (`model.js`) | Claude |
+| `src/combat/` | aiming, tap shots, charge shots, shot flight and hits (`shots.js`) | Claude |
+| `src/enemies/` | enemy kinds and behaviour (`enemies.js`), enemy models (`models.js`); bosses go here too | Codex |
+| `src/levels/` | level building blocks (`builders.js`), the levels (`smelter.js`, `test-yard.js`, `index.js`), platforms and crushers (`hazards.js`), checkpoints, goal, lava, capsules (`course.js`), level looks (`visuals.js`) | Codex |
+| `src/ui/`, `index.html` markup | HUD, menus, pause, clear and game-over screens, tuning panel, styles | Codex |
+| `src/fx/` | particles (`particles.js`), sound building blocks (`audio.js`) | Codex |
+| `src/core/`, `src/main.js`, the `<script>` line in `index.html`, `tests/run.cjs`, `package.json`, `.github/`, this file, `CLAUDE.md`, `README.md` | shared: Three.js import, helpers, tuning registry, world state and events, the step order, rendering setup, entry point, test runner, build and CI | Nobody without H's approval in chat |
+| `tests/suites/` | one test file per lane: `10-combat` and `20-player` and `90-input` (Claude); `30-enemies`, `40-levels`, `50-courses`, `80-screens`, `95-layout` (Codex) | per the suite's `owner` |
+| `TASKS.md` | the live board | each AI edits only its own section and its own request lines |
 
-## Map of the code (in file order)
-- **Tuning:** `DEFAULTS` holds every adjustable value. `SPEC` builds the in-game tuning panel (press T). New tunable values go in both.
-- **Level data:**
-  - Builder helpers: `box()` (a static solid; `kind` is floor, wall, crate, spike, belt or door), `dynBox()` (a moving platform or crusher), `addEnt()` (an enemy), `capsule()` (a health pickup), `checkpoint()`, `sign()`.
-  - `defineTestYard()` and `defineSmelter()` build each level. `LEVELS` lists them, and `setupLevel(id)` and `loadLevel(id)` switch between them.
-  - Coordinates: the stage runs toward −Z and Y is up. Smelter Yard spans z ≈ 12 to −216, and its floor heights are 0, 1.6, 10.4, 25 and 28.
-- **Player and physics:** `p` holds the player state.
-  - Movement: `moveAxis`, `probeWall` (wall-slide and wall-jump), `updateDynamics` (platforms and crushers), `pushOut`.
-  - Damage: `hurt`, `hazardHit` (spikes and lava), `die`, `loseLife`.
-- **Combat:** `aimRay`, `fireShot` (charge levels 0, 1 and 2), `updateShots`, `damageEnt`.
-- **Enemies:** `updateEnemies` runs one state machine per kind:
-  - walker: patrols back and forth
-  - flyer: hovers, telegraphs, swoops, returns
-  - turret: needs line of sight, telegraphs, fires
-  - dummy and mover: shooting-range targets
-- **`step(dt)`:** the main simulation tick.
-- **Rendering:**
-  - Hero model: `makePlayer`.
-  - Enemy models: `makeEntityMesh`.
-  - Level meshes: `buildLevelVisuals`, rebuilt on each level change.
-  - Effects: particles via `emit` and `burst`; dash afterimages ("ghosts").
-- **Audio:** `sfx` contains procedural WebAudio sounds.
-- **Game events:** `handleEvents` turns simulation `events` into effects and sounds. The game logic only pushes events and never touches visuals directly.
-- **UI:** the start, pause, clear and game-over overlays, the tuning panel, and the HUD (`updateHud`).
+Feel belongs with Claude: movement, camera and combat decide how the game feels. Enemies, levels and UI plug into those systems.
 
-## Design decisions H has already made (don't undo)
+If your task needs a change in the other lane, don't edit it. Write the request under "Requests to other AI" in `TASKS.md` and tell H. If it needs a shared file, ask H in chat first and say in the PR that H approved it.
+
+## How the code fits together (read before writing code)
+- **The fixed step.** `src/core/sim.js` runs the game 120 times a second in this order:
+  1. `updateHazards` (levels)
+  2. `updatePlayer` (player; calls `updateFire` in combat)
+  3. `updateShots` (combat)
+  4. `updateEnemies` (enemies)
+  5. `updatePickups` (levels)
+  6. `updateCourse` (levels: lava, checkpoints, goal)
+
+  Game logic must be deterministic: no `Math.random()`, `Date` or `performance.now()` inside update functions. The test bots depend on this. Randomness is fine in rendering and effects.
+- **Rendering.** Each frame `src/main.js` calls `renderPlayer`, `renderShots`, `renderEnemies`, `renderLevel`, `renderEmbers`, `renderWorld` and `updateHud`. Draw from the simulation state; never change it while rendering.
+- **Hooks the core calls.** Keep these names and signatures: `updatePlayer`, `placeAt`, `updateFire`, `updateShots`, `resetShots`, `renderShots`, `updateEnemies`, `resetEnemies`, `renderEnemies`, `buildEnemyVisuals`, `setupLevel`, `updateHazards`, `resetHazards`, `updateCourse`, `updatePickups`, `resetPickups`, `buildLevelVisuals`, `renderLevel`, `markCheckpoints`, `gatherInput`, `updateCamera`, `renderPlayer`, `updateParticles`, `renderEmbers`, `initUI`, `updateHud`, `initTuningPanel`. Grow a feature inside your lane's hook. For example, a boss updates from inside `updateEnemies`, renders from `renderEnemies` and resets in `resetEnemies`. If you truly need a new hook, ask through `TASKS.md`.
+- **Events, not direct calls, for effects.**
+  - The simulation pushes `events.push({ type: 'jump', ... })`. Any lane reacts with `on('jump', (e) => ...)` from `src/core/world.js`.
+  - Put a sound or effect in the lane that owns the event's meaning. Several lanes can react to one event (e.g. `die`: the player lane plays the sound, the UI shows the toast).
+  - Current event types are `jump`, `walljump`, `dash`, `airdash`, `land`, `hurt`, `die`, `revive`, `return`, `spikes`, `lava`, `shoot`, `charge`, `hit`, `shotwall`, `kill`, `entspawn`, `efire`, `eshotwall`, `eshothit`, `touch`, `swoop`, `slam`, `checkpoint`, `pickup`, `clear`, `restart` and `level`.
+- **APIs between lanes.**
+  - Damage the player only with `hurt(amount, dirX, dirZ)`, `hazardHit('spikes' | 'lava')` and `ko()` from `src/player/health.js`. Scale enemy damage by `tuning.damageTaken`.
+  - Player shots damage anything in `ENTS` through `damageEnt()` in `src/enemies/enemies.js`. A boss that is an entry in `ENTS` gets hit automatically.
+- **Tuning.** Register adjustable values in your own lane file with `defineTuning('Section', rows)` from `src/core/tuning.js`. The tuning panel (T key) builds itself from them. Read live values from `tuning.yourKey`.
+- **Levels.** A level is a function that calls the helpers in `src/levels/builders.js`; register it in `src/levels/index.js`. Stages run toward −Z and Y is up. Smelter Yard spans z ≈ 12 to −216, with floor heights 0, 1.6, 10.4, 25 and 28.
+- **Module rules.**
+  - Import Three.js only as `import * as THREE from '../core/three.js'`.
+  - Lanes import each other freely, so imports form cycles. **Top-level code must never call a function from another lane, and must never read another lane's values.** Use them inside functions only. Core modules (`three`, `util`, `tuning`, `world`, `render`) import no lanes.
+  - Wrap all `localStorage` access in the `store` helper.
+  - The only external sources allowed are Three.js from jsdelivr (exact version) and Google Fonts. Everything else is drawn in code: textures on canvases, sound with WebAudio. No new dependencies without H's approval.
+- **Test hook.** `window.__game` in `src/main.js` exposes state for the tests. Keep its fields.
+
+## Git rules
+1. Before anything, read `AGENTS.md` and `TASKS.md`, then `git pull` on `main`. Check open pull requests so you know what the other AI is changing.
+2. Work only in your lane (see above).
+3. Never push to `main`, never force-push `main`, never delete the other AI's branch. Work on `claude/<short-task>` or `codex/<short-task>` and open a pull request into `main`.
+4. Keep it small: one task per branch, one focused PR. Don't reformat or rename files you weren't asked to touch.
+5. The PR description says what changed and which files, how H can test it in under a minute (exact steps in the game), and what you could not test.
+6. H merges one PR at a time and plays `main` between merges. If your open PR now conflicts, rebase it onto the new `main`, fix the conflict in your own files, re-run the tests and push. H never resolves conflicts by hand.
+7. If a merge breaks the game, H reverts that PR in GitHub and its owner fixes it on a new branch.
+
+## Definition of done
+- `npm test` ends with `PASS` and the Playtest check on the PR is green.
+- No errors in the browser console.
+- The feature works as the task describes. A new mechanic gets a check in your lane's suite in `tests/suites/`.
+- If you changed a level's layout on purpose, update that level's bot route in `tests/suites/50-courses.cjs` in the same PR.
+- Your section of `TASKS.md` is updated.
+
+## Session routine
+**Start of every session:**
+1. Read `AGENTS.md` and `TASKS.md`.
+2. `git pull` on `main`; look at open PRs.
+3. Tell H in one line what you're doing and in which files ("I'm doing X in files Y").
+4. Branch.
+
+**End of every session:**
+1. Run the tests.
+2. Commit, push your branch, open the PR.
+3. Update your section of `TASKS.md` (done, in progress, blocked) and add any requests for the other AI.
+4. Report to H in three parts: what changed, exact steps to test it, the suggested next task.
+
+## Working with H
+- H likes short, direct, execution-focused updates. No long explanations unless asked.
+- If a task is unclear, ask H one short question. Don't guess on anything that changes how the game feels or plays: speed, jump height, camera, hit timing and difficulty are H's call. The AIs propose, H decides.
+- Don't invent progress. If something is untested or broken, say so plainly.
+- When the AIs disagree on a design question, each writes a two-line proposal in `TASKS.md`. H picks, and the choice goes into "Decisions H has made" below.
+
+## Decisions H has made (don't undo)
+Either AI may add a line here when H states a decision; mention it in the PR.
 - Wall-jump values: wallKick 4, wallJumpHeight 2.6.
 - Removed at H's request:
   - the circular charge meter
@@ -66,9 +106,10 @@ An original over-the-shoulder 3D action platformer in the style of the Mega Man 
   - Spikes and lava take a quarter of health (4 of 16 HP) and send you back to the last checkpoint. Neither shows a damage message or a "Back to checkpoint" message.
   - Running out of health, or being crushed, costs a life. There are 3 lives per run, and losing the last one is game over (restart from the beginning).
   - The "N lives left" message after losing a life stays.
+- Lanes as in the table above: the boss belongs to Codex; movement, camera and combat belong to Claude.
 
 ## Milestone 6: the boss (Forge Warden, working name)
-A heavy furnace mech with a glowing core, in an arena behind the boss door at the end of Smelter Yard. Its moves:
+A heavy furnace mech with a glowing core, in an arena behind the boss door at the end of Smelter Yard.
 
 | Attack | What it does | How the player beats it |
 |---|---|---|
@@ -82,4 +123,9 @@ The fight also needs:
 - a clear tell (a flash or a sound) about half a second before every attack
 - a defeat explosion and a win screen
 
+The original plan also has a soft lock-on for the boss (shots bend slightly toward it); that is combat, so Claude.
+
 **Done when:** every hit the player takes feels like their own mistake, not a cheap shot.
+
+## Milestone 7: art and feel pass
+Better models and effects, hit-stop, more screen shake, a win screen. Split by lane when it starts.
