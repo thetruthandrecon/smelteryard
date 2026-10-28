@@ -71,14 +71,17 @@ module.exports = {
       eventStart = G.events.length; G.step(STEP);
       const slagWarned = boss.st === 'slagTell' && G.events.slice(eventStart).some((e) => e.type === 'bosstelegraph' && e.attack === 'slag');
       run(0.49);
+      const slagTellHeld = boss.st === 'slagTell';
       const slagTargetZ = boss.z + 8;
       placeAt({ x: 0.5, y: boss.y, z: slagTargetZ });
       eventStart = G.events.length; run(0.02);
       const slagTargets = ESHOTS.filter((s) => s.kind === 'slag').map((s) => ({ x: s.targetX, z: s.targetZ }));
-      out.bossSlagVolley = { warned: slagWarned, count: slagTargets.length, targetXs: slagTargets.map((s) => +s.x.toFixed(1)).sort((a, b) => a - b), targetZs: slagTargets.map((s) => +s.z.toFixed(1)), nextAttack: boss.nextAttack };
+      out.bossSlagVolley = { warned: slagWarned, tellHeld: slagTellHeld, count: slagTargets.length, targetXs: slagTargets.map((s) => +s.x.toFixed(1)).sort((a, b) => a - b), targetZs: slagTargets.map((s) => +s.z.toFixed(1)), nextAttack: boss.nextAttack };
       placeAt({ x: 4, y: boss.y, z: slagTargetZ + 4 });
-      run(0.85);
-      out.bossSlagLandings = G.events.slice(eventStart).filter((e) => e.type === 'slagland').length;
+      run(0.75);
+      const slagLandedEarly = G.events.slice(eventStart).some((e) => e.type === 'slagland');
+      run(0.12);
+      out.bossSlagLandings = { early: slagLandedEarly, count: G.events.slice(eventStart).filter((e) => e.type === 'slagland').length };
 
       tuning.damageTaken = 1.5;
       p.iframes = 0; p.hp = 16;
@@ -153,8 +156,8 @@ module.exports = {
     expect(r.bossCharge.warned && r.bossCharge.linedUpDuringTell && r.bossCharge.alignedX === 2.5 && r.bossCharge.started && r.bossCharge.laneLocked && r.bossCharge.frontReached && r.bossCharge.reverseChargeStarted && r.bossCharge.fullCross && r.bossCharge.damage === 4 && r.bossCharge.speed === 18 && r.bossCharge.lane === 25.8 && r.bossCharge.frontZ === -218 && r.bossCharge.backZ === -243.8, 'the Warden should track the player during its tell, lock the lane, and Charge across the full arena for 4 HP at 18 m/s');
     expect(r.bossCoreHit.damage === 1.5 && r.bossCoreHit.weakspot && r.bossBodyHit.damage === 1 && !r.bossBodyHit.weakspot, 'a chest-core hit should deal 1.5x the damage of an otherwise identical body hit');
     expect(r.slagDamageSliders.blob === 3 && r.slagDamageSliders.fire === 2, 'the Slag blob and fire damage sliders should default to 3 HP and 2 HP');
-    expect(r.bossSlagVolley.warned && r.bossSlagVolley.count === 3 && JSON.stringify(r.bossSlagVolley.targetXs) === JSON.stringify([-1.5, 0.5, 2.5]) && r.bossSlagVolley.targetZs.every((z) => z === -223) && r.bossSlagVolley.nextAttack === 'charge', 'the Warden should lob three blobs 2 m apart around the player and alternate back to Charge');
-    expect(r.bossSlagLandings === 3 && r.bossSlagFireHit.damage === 3 && r.bossSlagFireHit.hp === 13 && r.bossSlagFireHit.effect && r.bossSlagExpired, 'Slag blobs should land, leave three-second fire patches, and deal scaled 2 HP touch damage through hurt()');
+    expect(r.bossSlagVolley.warned && r.bossSlagVolley.tellHeld && r.bossSlagVolley.count === 3 && JSON.stringify(r.bossSlagVolley.targetXs) === JSON.stringify([-1.5, 0.5, 2.5]) && r.bossSlagVolley.targetZs.every((z) => z === -223) && r.bossSlagVolley.nextAttack === 'charge', 'the Warden should hold the Slag tell, lob three blobs 2 m apart around the player, and alternate back to Charge');
+    expect(!r.bossSlagLandings.early && r.bossSlagLandings.count === 3 && r.bossSlagFireHit.damage === 3 && r.bossSlagFireHit.hp === 13 && r.bossSlagFireHit.effect && r.bossSlagExpired, 'Slag blobs should take about 0.8 s to land, leave three-second fire patches, and deal scaled 2 HP touch damage through hurt()');
     expect(r.bossSlagBlobHit.damage === 4.5 && r.bossSlagBlobHit.hp === 11.5 && r.bossSlagBlobHit.impact && r.bossSlagBlobHit.knockedBack, 'a Slag blob should deal scaled 3 HP damage and apply normal knockback');
     expect(r.bossCharge.nextAttackAfterCharge === 'slag', 'the Warden should alternate to Slag after a Charge');
     expect(bossHealthBar.value === '97' && bossHealthBar.label === '97%', 'the boss health bar should show health lost to body and core hits');
