@@ -2,7 +2,7 @@
 
 An original over-the-shoulder 3D action platformer that runs in the browser. H playtests and decides; two AIs build it: Claude (movement, camera, combat) and Codex (enemies and bosses, levels, menus and HUD, effects and sound).
 
-**Play:** the published link (GitHub Pages) always runs the latest `main`. Changes show up there a minute or two after a merge.
+**Play:** [thetruthandrecon.github.io/smelteryard](https://thetruthandrecon.github.io/smelteryard/) always runs the latest `main`. Changes show up a minute or two after a merge; a normal refresh is enough.
 
 **How a change gets in:**
 1. An AI makes it on its own branch and opens a pull request.

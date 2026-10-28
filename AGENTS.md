@@ -12,6 +12,9 @@ An original over-the-shoulder 3D action platformer in the spirit of Mega Man X5:
 - **Play:** serve the repo folder over http and open `index.html`; the published link (GitHub Pages) does this. Opening the file straight from disk won't work, because browsers block module imports from `file://`.
 - **Test:** `npm install`, then `npx playwright install chromium`, then `npm test`. It must end with `PASS`. Run one suite with `npm test -- levels` (any part of a suite's file name). Screenshots go to `tests/shots/` (not committed).
 - **The GitHub check "Playtest"** runs `npm test` on every pull request. If you can't run the tests in your own environment, say so in the PR and point to that check.
+- **Publishing.** `.github/workflows/publish.yml` publishes `main` to GitHub Pages on every merge, using `tools/build-site.cjs`.
+  - Each version goes in its own folder, `v/<commit>/`, and the published `index.html` reloads itself once if a newer version exists, so a normal refresh always shows the latest.
+  - The publisher rewrites two lines of `index.html`: the stylesheet link `href="src/ui/style.css"` and the script line `<script type="module" src="src/main.js"></script>`. Keep both exactly as they are; the Playtest check fails if it can't find them.
 
 ## Folder map and lanes
 Each lane is a set of files that only its owner edits.
@@ -24,7 +27,7 @@ Each lane is a set of files that only its owner edits.
 | `src/levels/` | level building blocks (`builders.js`), the levels (`smelter.js`, `test-yard.js`, `index.js`), platforms and crushers (`hazards.js`), checkpoints, goal, lava, capsules (`course.js`), level looks (`visuals.js`) | Codex |
 | `src/ui/`, `index.html` markup | HUD, menus, pause, clear and game-over screens, tuning panel, styles | Codex |
 | `src/fx/` | particles (`particles.js`), sound building blocks (`audio.js`) | Codex |
-| `src/core/`, `src/main.js`, the `<script>` line in `index.html`, `tests/run.cjs`, `package.json`, `.github/`, this file, `CLAUDE.md`, `README.md` | shared: Three.js import, helpers, tuning registry, world state and events, the step order, rendering setup, entry point, test runner, build and CI | Nobody without H's approval in chat |
+| `src/core/`, `src/main.js`, the `<script>` line and stylesheet link in `index.html`, `tests/run.cjs`, `tools/`, `package.json`, `.github/`, this file, `CLAUDE.md`, `README.md` | shared: Three.js import, helpers, tuning registry, world state and events, the step order, rendering setup, entry point, test runner, build and CI | Nobody without H's approval in chat |
 | `tests/suites/` | one test file per lane: `10-combat` and `20-player` and `90-input` (Claude); `30-enemies`, `40-levels`, `50-courses`, `80-screens`, `95-layout` (Codex) | per the suite's `owner` |
 | `TASKS.md` | the live board | each AI edits only its own section and its own request lines |
 
