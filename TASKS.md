@@ -31,7 +31,7 @@ Done:
 - Milestone 6, item 2: Warden health, contact damage, hit feedback, player-tracking full-arena Charge, and reset on death (branch `codex/boss-charge`; PR #3; `npm test` passes)
 - Warden chest-core weak spot: hits at the glowing core deal 1.5x body damage based on shot impact position (branch `codex/boss-core`; PR #8; PR Playtest passes)
 
-In progress: nothing
+In progress: Milestone 6, item 3, Slag lob: 3 blobs land 2 m apart around the player after the 0.5 s tell with 0.8 s flight, alternating with Charge on the existing 1 s recovery; blob damage 3 HP and fire touch 2 HP, both scaled by `damageTaken` and adjustable under Tuning → Enemies (`codex/slag-lob`)
 
 Blocked: nothing
 

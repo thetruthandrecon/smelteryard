@@ -62,7 +62,52 @@ module.exports = {
       shot(boss.z + 4, 0, boss.y + 0.6); run(0.2);
       out.bossBodyHit = { damage: +(bossHp - boss.hp).toFixed(1), weakspot: G.events.slice(eventStart).some((e) => e.type === 'hit' && e.weakspot) };
 
+      // Slag alternates with Charge, targets the player's position at the end of its tell, and leaves damaging fire
+      const savedDamageTaken = tuning.damageTaken;
+      out.slagDamageSliders = { blob: tuning.slagBlobDamage, fire: tuning.slagFireDamage };
+      state.noEnemies = false; boss.combatReady = true; boss.st = 'idle'; boss.cd = 0; boss.nextAttack = 'slag';
+      p.dead = 0; p.returning = 0; p.iframes = 10; p.hp = 16;
+      placeAt({ x: -2, y: boss.y, z: boss.z + 8 });
+      eventStart = G.events.length; G.step(STEP);
+      const slagWarned = boss.st === 'slagTell' && G.events.slice(eventStart).some((e) => e.type === 'bosstelegraph' && e.attack === 'slag');
+      run(0.49);
+      const slagTargetZ = boss.z + 8;
+      placeAt({ x: 0.5, y: boss.y, z: slagTargetZ });
+      eventStart = G.events.length; run(0.02);
+      const slagTargets = ESHOTS.filter((s) => s.kind === 'slag').map((s) => ({ x: s.targetX, z: s.targetZ }));
+      out.bossSlagVolley = { warned: slagWarned, count: slagTargets.length, targetXs: slagTargets.map((s) => +s.x.toFixed(1)).sort((a, b) => a - b), targetZs: slagTargets.map((s) => +s.z.toFixed(1)), nextAttack: boss.nextAttack };
+      placeAt({ x: 4, y: boss.y, z: slagTargetZ + 4 });
+      run(0.85);
+      out.bossSlagLandings = G.events.slice(eventStart).filter((e) => e.type === 'slagland').length;
+
+      tuning.damageTaken = 1.5;
+      p.iframes = 0; p.hp = 16;
+      placeAt({ x: 0.5, y: boss.y, z: slagTargetZ });
+      eventStart = G.events.length; G.step(STEP);
+      const fireHurt = G.events.slice(eventStart).find((e) => e.type === 'hurt');
+      out.bossSlagFireHit = { damage: fireHurt?.amount ?? 0, hp: p.hp, effect: G.events.slice(eventStart).some((e) => e.type === 'slagfirehit') };
+
+      // let the patches expire without another boss attack, then return to the center to verify they are gone
+      boss.activated = false; placeAt({ x: 4, y: boss.y, z: slagTargetZ + 4 });
+      run(3.05);
+      p.hp = 16; p.iframes = 0; placeAt({ x: 0.5, y: boss.y, z: slagTargetZ });
+      eventStart = G.events.length; G.step(STEP);
+      out.bossSlagExpired = p.hp === 16 && !G.events.slice(eventStart).some((e) => e.type === 'slagfirehit');
+
+      // a direct blob hit uses hurt(), including the normal damage multiplier and knockback
+      boss.activated = true; boss.combatReady = true; boss.st = 'idle'; boss.cd = 0; boss.nextAttack = 'slag';
+      p.hp = 16; p.iframes = 0; placeAt({ x: 0.5, y: boss.y, z: slagTargetZ });
+      tuning.damageTaken = 1.5; eventStart = G.events.length;
+      let blobKnockback = false;
+      G.step(STEP); run(0.52); run(0.8, () => {
+        if (!blobKnockback && G.events.slice(eventStart).some((e) => e.type === 'slagblobhit')) blobKnockback = Math.hypot(p.vx, p.vz) > 0;
+      });
+      const blobHurt = G.events.slice(eventStart).find((e) => e.type === 'hurt');
+      out.bossSlagBlobHit = { damage: blobHurt?.amount ?? 0, hp: p.hp, impact: G.events.slice(eventStart).some((e) => e.type === 'slagblobhit'), knockedBack: blobKnockback };
+      tuning.damageTaken = savedDamageTaken;
+
       // touching the Warden hurts, and the half-second Charge warning precedes its ram
+      boss.activated = true; boss.nextAttack = 'charge';
       boss.st = 'idle'; boss.cd = 100; state.noEnemies = false;
       placeAt({ x: boss.x, y: boss.y, z: boss.z }); p.iframes = 0; p.hp = 16; G.step(STEP);
       out.bossContactDamage = 16 - p.hp;
@@ -82,11 +127,12 @@ module.exports = {
       const laneLocked = Math.abs(boss.x - lockedX) < 0.001;
       run(0.6);
       const frontReached = boss.st === 'idle' && boss.z === boss.chargeFrontZ;
-      boss.st = 'idle'; boss.cd = 0; boss.z = boss.chargeFrontZ; boss.chargeDirZ = -1; p.iframes = 10;
+      const nextAttackAfterCharge = boss.nextAttack;
+      boss.st = 'idle'; boss.cd = 0; boss.z = boss.chargeFrontZ; boss.chargeDirZ = -1; boss.nextAttack = 'charge'; p.iframes = 10;
       placeAt({ x: boss.x, y: boss.y, z: boss.z - 5 }); G.step(STEP); run(0.51);
       const reverseChargeStarted = boss.st === 'charge';
       run(1.5);
-      out.bossCharge = { warned: bossWarned, linedUpDuringTell, alignedX: +lockedX.toFixed(1), started: chargeStarted, laneLocked, frontReached, reverseChargeStarted, fullCross: boss.st === 'idle' && boss.z === boss.chargeBackZ, damage: chargeDamage, speed: boss.chargeSpeed, lane: +Math.abs(boss.chargeFrontZ - boss.chargeBackZ).toFixed(1), frontZ: boss.chargeFrontZ, backZ: boss.chargeBackZ };
+      out.bossCharge = { warned: bossWarned, linedUpDuringTell, alignedX: +lockedX.toFixed(1), started: chargeStarted, laneLocked, frontReached, nextAttackAfterCharge, reverseChargeStarted, fullCross: boss.st === 'idle' && boss.z === boss.chargeBackZ, damage: chargeDamage, speed: boss.chargeSpeed, lane: +Math.abs(boss.chargeFrontZ - boss.chargeBackZ).toFixed(1), frontZ: boss.chargeFrontZ, backZ: boss.chargeBackZ };
       return out;
     });
     log('enemies', r);
@@ -106,6 +152,11 @@ module.exports = {
     expect(r.bossContactDamage === 3, 'touching the Warden should deal 3 HP contact damage');
     expect(r.bossCharge.warned && r.bossCharge.linedUpDuringTell && r.bossCharge.alignedX === 2.5 && r.bossCharge.started && r.bossCharge.laneLocked && r.bossCharge.frontReached && r.bossCharge.reverseChargeStarted && r.bossCharge.fullCross && r.bossCharge.damage === 4 && r.bossCharge.speed === 18 && r.bossCharge.lane === 25.8 && r.bossCharge.frontZ === -218 && r.bossCharge.backZ === -243.8, 'the Warden should track the player during its tell, lock the lane, and Charge across the full arena for 4 HP at 18 m/s');
     expect(r.bossCoreHit.damage === 1.5 && r.bossCoreHit.weakspot && r.bossBodyHit.damage === 1 && !r.bossBodyHit.weakspot, 'a chest-core hit should deal 1.5x the damage of an otherwise identical body hit');
+    expect(r.slagDamageSliders.blob === 3 && r.slagDamageSliders.fire === 2, 'the Slag blob and fire damage sliders should default to 3 HP and 2 HP');
+    expect(r.bossSlagVolley.warned && r.bossSlagVolley.count === 3 && JSON.stringify(r.bossSlagVolley.targetXs) === JSON.stringify([-1.5, 0.5, 2.5]) && r.bossSlagVolley.targetZs.every((z) => z === -223) && r.bossSlagVolley.nextAttack === 'charge', 'the Warden should lob three blobs 2 m apart around the player and alternate back to Charge');
+    expect(r.bossSlagLandings === 3 && r.bossSlagFireHit.damage === 3 && r.bossSlagFireHit.hp === 13 && r.bossSlagFireHit.effect && r.bossSlagExpired, 'Slag blobs should land, leave three-second fire patches, and deal scaled 2 HP touch damage through hurt()');
+    expect(r.bossSlagBlobHit.damage === 4.5 && r.bossSlagBlobHit.hp === 11.5 && r.bossSlagBlobHit.impact && r.bossSlagBlobHit.knockedBack, 'a Slag blob should deal scaled 3 HP damage and apply normal knockback');
+    expect(r.bossCharge.nextAttackAfterCharge === 'slag', 'the Warden should alternate to Slag after a Charge');
     expect(bossHealthBar.value === '97' && bossHealthBar.label === '97%', 'the boss health bar should show health lost to body and core hits');
   },
 };
