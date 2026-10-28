@@ -21,7 +21,7 @@ export const ENT_SPEC = {
   turret: { hx: 0.5, hy: 1.2, hz: 0.5, hp: 8, respawn: 10 },
   walker: { hx: 0.55, hy: 1.15, hz: 0.55, hp: 3, respawn: 6, touch: 3 },
   flyer: { hx: 0.45, hy: 0.8, hz: 0.45, hp: 2, respawn: 6, touch: 2 },
-  boss: { hx: 1.45, hy: 3.9, hz: 1.1, hp: 100, respawn: 999999 },
+  boss: { hx: 1.45, hy: 3.9, hz: 1.1, hp: 100, respawn: 999999, touch: 3, chargeDamage: 4, chargeSpeed: 18 },
 };
 // place an enemy in the current level (called from level definitions)
 export function addEnt(kind, x, y, z, extra = {}) {
@@ -38,7 +38,11 @@ export const ESHOTS = [];
 export function resetEnt(e) {
   e.x = e.x0; e.y = e.y0; e.z = e.z0; e.alive = e.kind !== 'boss'; e.hp = e.maxHp; e.timer = 0; e.flash = 0; e.cd = 1; e.tele = 0;
   e.st = 'hover'; e.t = 0; e.t2 = 0; e.dir = e.dir0; e.yaw = e.yaw0; e.vx = e.vy = e.vz = 0;
-  if (e.kind === 'boss') { e.activated = false; e.damageable = false; e.introTimer = 0; e.introProgress = 0; e.phase = 0; }
+  if (e.kind === 'boss') {
+    e.activated = false; e.damageable = false; e.combatReady = false;
+    e.introTimer = 0; e.introProgress = 0; e.phase = 0; e.introEntering = false;
+    e.chargeDirZ = 0; e.chargeTargetZ = e.entryZ; e.chargeX = e.x0;
+  }
 }
 export function resetEnemies() {
   for (const e of ENTS) resetEnt(e);
@@ -50,13 +54,88 @@ export function activateBoss() {
   if (!boss || boss.activated) return false;
   boss.alive = true; boss.activated = true; boss.damageable = false;
   boss.hp = boss.maxHp; boss.introTimer = 0; boss.introProgress = 0;
+  boss.combatReady = false; boss.introEntering = false; boss.chargeDirZ = 0;
+  boss.chargeTargetZ = boss.entryZ; boss.chargeX = boss.x0; boss.cd = 0;
   boss.st = 'enter'; boss.z = boss.z0; boss.yaw = Math.PI;
   return true;
 }
 
+function startBossChargeTell(e) {
+  if (!e.chargeDirZ) e.chargeDirZ = Math.sign(p.z - e.z) || 1;
+  e.chargeX = e.x;
+  e.chargeTargetZ = e.chargeDirZ > 0 ? e.chargeFrontZ : e.chargeBackZ;
+  e.yaw = e.chargeDirZ > 0 ? Math.PI : 0;
+  e.st = 'chargeTell'; e.t2 = 0.5; e.tele = 1;
+  events.push({ type: 'bosstelegraph', e, attack: 'charge' });
+}
+
+function updateBoss(e, dt, attack) {
+  e.introTimer = Math.min(e.introDuration, e.introTimer + dt);
+  e.introProgress = e.introTimer / e.introDuration;
+  e.phase += dt * 3;
+
+  if (!e.combatReady && e.introProgress >= 1) {
+    e.combatReady = true;
+    e.damageable = true;
+    e.cd = 0;
+  }
+
+  if (e.combatReady && attack && e.st === 'enter') {
+    e.introEntering = true;
+    startBossChargeTell(e);
+  }
+
+  if (e.st === 'enter') {
+    const dz = e.entryZ - e.z, move = e.entrySpeed * dt;
+    e.yaw = Math.PI;
+    if (Math.abs(dz) <= move) { e.z = e.entryZ; e.st = 'idle'; }
+    else e.z += Math.sign(dz) * move;
+  }
+
+  if (e.st === 'chargeTell') {
+    if (e.introEntering) {
+      const dz = e.entryZ - e.z, move = e.entrySpeed * dt;
+      if (Math.abs(dz) <= move) { e.z = e.entryZ; e.introEntering = false; }
+      else e.z += Math.sign(dz) * move;
+    }
+    e.t2 = Math.max(0, e.t2 - dt);
+    if (e.t2 <= 0 && !e.introEntering) {
+      e.st = 'charge'; e.tele = 0;
+      events.push({ type: 'bosscharge', e });
+    }
+  } else if (e.st === 'charge') {
+    const dz = e.chargeTargetZ - e.z, move = e.chargeSpeed * dt;
+    e.x = e.chargeX;
+    e.yaw = e.chargeDirZ > 0 ? Math.PI : 0;
+    if (Math.abs(dz) <= move) {
+      e.z = e.chargeTargetZ; e.st = 'idle'; e.cd = 1;
+      e.chargeDirZ *= -1;
+    } else e.z += Math.sign(dz) * move;
+  } else if (e.st === 'idle' && e.combatReady && attack) {
+    e.cd -= dt;
+    if (e.cd <= 0) startBossChargeTell(e);
+  }
+
+  if (e.combatReady && attack) {
+    const mn = entMin(e), mx = entMax(e);
+    if (p.x - R < mx[0] && p.x + R > mn[0] && p.y < mx[1] && p.y + H > mn[1] && p.z - R < mx[2] && p.z + R > mn[2]) {
+      const charging = e.st === 'charge';
+      if (hurt((charging ? e.chargeDamage : e.touch) * tuning.damageTaken, p.x - e.x, p.z - e.z)) {
+        const x = (p.x + e.x) / 2, y = p.y + 1, z = (p.z + e.z) / 2;
+        events.push({ type: 'touch', x, y, z, boss: true, charge: charging });
+        if (charging) events.push({ type: 'bossimpact', x, y, z });
+      }
+    }
+  }
+}
+
 // a player shot hit enemy e at (x, y, z); returns true if that destroyed it
 export function damageEnt(e, dmg, x, y, z, level) {
-  if (e.kind === 'boss' && !e.damageable) return false;
+  if (e.kind === 'boss' && !e.damageable) {
+    e.flash = 0.12;
+    events.push({ type: 'hit', x, y, z, kill: false, level, blocked: true });
+    return false;
+  }
   e.hp -= dmg; e.flash = 0.12;
   const kill = e.hp <= 0;
   events.push({ type: 'hit', x, y, z, kill, level });
@@ -75,16 +154,7 @@ export function updateEnemies(dt) {
     }
     e.flash = Math.max(0, e.flash - dt);
     if (e.kind === 'boss') {
-      if (!e.activated) continue;
-      e.introTimer = Math.min(e.introDuration, e.introTimer + dt);
-      e.introProgress = e.introTimer / e.introDuration;
-      e.phase += dt * 3;
-      if (e.st === 'enter') {
-        const dz = e.entryZ - e.z, move = e.entrySpeed * dt;
-        e.yaw = Math.PI;
-        if (Math.abs(dz) <= move) { e.z = e.entryZ; e.st = 'idle'; }
-        else e.z += Math.sign(dz) * move;
-      }
+      if (e.activated) updateBoss(e, dt, attack);
       continue;
     } else if (e.kind === 'mover') {
       e.z += e.dir * e.speed * dt;

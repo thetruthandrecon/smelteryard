@@ -86,7 +86,7 @@ module.exports = {
         bossActivated: boss.activated,
         bossWalkedIn: boss.z > boss.z0,
         introFilled: boss.introProgress === 1,
-        bossNotDamageable: !boss.damageable,
+        bossDamageable: boss.damageable,
       };
     });
     await page.waitForFunction(() => {
@@ -96,7 +96,7 @@ module.exports = {
     const bossHud = await page.evaluate(() => ({ hidden: document.getElementById('boss-hud').hidden, value: document.querySelector('.boss-track').getAttribute('aria-valuenow') }));
     log('Boss arena intro', { ...arena, bossHud });
     expect(arena.doorOpen && arena.stageStillActive && arena.bossActivated && arena.bossWalkedIn && arena.introFilled, 'opening the boss door should reveal the entering boss and fill its intro bar');
-    expect(arena.bossNotDamageable, 'the arena placeholder should stay non-combat until the next boss task');
+    expect(arena.bossDamageable, 'the boss should become damageable when its intro bar fills');
     expect(!bossHud.hidden && bossHud.value === '100', 'the boss health bar should stay visible and full after its intro');
   },
 };

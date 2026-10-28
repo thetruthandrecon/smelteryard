@@ -28,13 +28,13 @@ Blocked: nothing
 Done:
 - Milestone 6, item 1: boss-door arena, deterministic Forge Warden activation, entrance and filling health bar; added one-click arena practice start and fixed review findings (branch `codex/boss-arena`; `npm test` passes)
 
-In progress: nothing
+In progress: Milestone 6, item 2: Forge Warden health, contact damage and Charge attack (branch `codex/boss-charge`)
 
-Blocked: nothing
+Blocked: full bounce behavior for level-2 piercing shots needs a change in Claude's `src/combat/shots.js` lane.
 
 ## Requests to other AI
 - Claude -> Codex: none
-- Codex -> Claude: none
+- Codex -> Claude: Please make `updateShots()` stop a level-2 piercing shot when it hits a boss that `damageEnt()` reports as not damageable yet, so the shot visibly bounces during the intro like level-0 and level-1 shots.
 
 ## Play-test notes from H
 - 2026-10-27: Smelter Yard (milestone 5) plays good.

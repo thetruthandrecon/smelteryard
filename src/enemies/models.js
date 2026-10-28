@@ -3,7 +3,7 @@ import * as THREE from '../core/three.js';
 import { ENTS, on } from '../core/world.js';
 import { canvasTex, makeOrb } from '../core/render.js';
 import { ESHOTS } from './enemies.js';
-import { emit, burst, C_TEAL, C_MOLTEN, C_WHITE, C_RED } from '../fx/particles.js';
+import { emit, burst, C_TEAL, C_MOLTEN, C_WHITE, C_RED, C_AMBER } from '../fx/particles.js';
 import { tone, hiss, near } from '../fx/audio.js';
 
 const targetTex = canvasTex(128, (g, s) => {
@@ -88,7 +88,7 @@ function makeEntityMesh(e) {
     const core = new THREE.Mesh(new THREE.SphereGeometry(0.52, 16, 12), coreMat); core.position.set(0, 2.12, -0.72); g.add(core);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.1, 8, 24), new THREE.MeshStandardMaterial({ color: 0xd7a56c, roughness: 0.34, metalness: 0.8 }));
     rim.position.copy(core.position); g.add(rim);
-    return { g, flashMats, core, coreMat };
+    return { g, flashMats, core, coreMat, visorMat };
   }
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 }));
   base.position.y = 0.22; g.add(base);
@@ -142,8 +142,11 @@ export function renderEnemies() {
       v.body.position.y = 0.8 + Math.abs(Math.cos(e.phase)) * 0.05;
     } else if (e.kind === 'boss') {
       v.g.rotation.y = e.yaw;
-      v.core.scale.setScalar(1 + Math.sin(now * 8) * 0.06);
-      v.coreMat.color.setRGB(1, 0.24 + Math.sin(now * 5) * 0.08, 0.04);
+      const tellPulse = e.st === 'chargeTell' && Math.sin(now * 38) > 0 ? 1 : 0;
+      v.core.scale.setScalar(e.st === 'chargeTell' ? 1.06 + tellPulse * 0.28 : 1 + Math.sin(now * 8) * 0.06);
+      v.coreMat.color.setRGB(1, e.st === 'chargeTell' ? 0.62 + tellPulse * 0.34 : 0.24 + Math.sin(now * 5) * 0.08, e.st === 'chargeTell' ? 0.08 + tellPulse * 0.8 : 0.04);
+      v.visorMat.color.setRGB(1, e.st === 'chargeTell' ? 0.45 + tellPulse * 0.5 : 0.25, e.st === 'chargeTell' ? 0.2 + tellPulse * 0.7 : 0.08);
+      if (e.st === 'charge') emit(e.x, e.y + 0.3, e.z, 0, 0.15, -e.chargeDirZ * 1.5, 0.24, C_MOLTEN, 0);
     } else if (e.kind === 'flyer') {
       v.g.rotation.y = e.yaw;
       const flap = Math.sin(now * (e.st === 'swoop' ? 40 : 18) + i) * 0.5;
@@ -164,6 +167,9 @@ const sfx = {
   kill: () => { hiss(0.35, 1200, 120, 0.25); tone(220, 50, 0.3, 'sine', 0.2); },
   efire: (v) => tone(300, 160, 0.12, 'square', 0.06 * v),
   swoop: (v) => { hiss(0.4, 600, 2600, 0.16 * v); tone(260, 520, 0.35, 'sawtooth', 0.04 * v); },
+  bossTell: (v) => { tone(220, 900, 0.42, 'sawtooth', 0.14 * v); hiss(0.45, 800, 2800, 0.16 * v); },
+  bossCharge: (v) => { tone(130, 52, 0.24, 'sawtooth', 0.18 * v); hiss(0.65, 1500, 100, 0.24 * v); },
+  bossImpact: (v) => { tone(88, 40, 0.2, 'square', 0.2 * v); hiss(0.18, 1200, 180, 0.16 * v); },
 };
 on('kill', ({ e }) => { burst(e.x, e.y + e.hy * 0.6, e.z, 40, 7, C_MOLTEN, { up: 1.2, grav: 8, life: 0.7 }); burst(e.x, e.y + e.hy * 0.6, e.z, 16, 3, C_WHITE, { up: 0.8, grav: 2, life: 0.4 }); sfx.kill(); });
 on('entspawn', ({ e }) => { burst(e.x, e.y + e.hy * 0.5, e.z, 14, 2, C_TEAL, { up: 0.5, grav: 0, life: 0.4 }); });
@@ -172,3 +178,6 @@ on('eshotwall', (e) => { burst(e.x, e.y, e.z, 8, 3, C_MOLTEN, { up: 0.6, grav: 6
 on('eshothit', (e) => { burst(e.x, e.y, e.z, 14, 4, C_RED, { up: 0.8, grav: 6, life: 0.35 }); });
 on('touch', (e) => { burst(e.x, e.y, e.z, 12, 3, C_RED, { up: 0.8, grav: 6, life: 0.3 }); });
 on('swoop', ({ e }) => { sfx.swoop(near(e.x, e.y, e.z, 25)); });
+on('bosstelegraph', ({ e }) => { burst(e.x, e.y + 2.1, e.z, 20, 3, C_AMBER, { up: 0.7, grav: 1, life: 0.4 }); sfx.bossTell(near(e.x, e.y, e.z, 35)); });
+on('bosscharge', ({ e }) => { burst(e.x, e.y + 0.35, e.z, 26, 5, C_MOLTEN, { up: 0.8, grav: 7, life: 0.4, dirZ: -e.chargeDirZ }); sfx.bossCharge(near(e.x, e.y, e.z, 35)); });
+on('bossimpact', (e) => { burst(e.x, e.y, e.z, 24, 5, C_WHITE, { up: 0.9, grav: 8, life: 0.35 }); sfx.bossImpact(near(e.x, e.y, e.z, 35)); });
