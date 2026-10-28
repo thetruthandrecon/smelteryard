@@ -2,7 +2,7 @@
 import { ENTS, R, H, state, events, LEVEL } from '../core/world.js';
 import { tuning, defineTuning } from '../core/tuning.js';
 import { damp, angleDamp } from '../core/util.js';
-import { segSolids, rayBox, lineOfSight } from '../player/physics.js';
+import { segSolids, rayBox, lineOfSight, groundBelow } from '../player/physics.js';
 import { p } from '../player/player.js';
 import { hurt } from '../player/health.js';
 
@@ -12,6 +12,8 @@ defineTuning('Enemies', [
   ['walkerSpeed', 'Walker speed', 2.2, 0.5, 6, 0.1, 'm/s'],
   ['flyerSpeed', 'Flyer swoop speed', 12, 4, 22, 0.5, 'm/s'],
   ['enemiesFire', 'Enemies attack', true],
+  ['slagBlobDamage', 'Slag blob damage', 3, 0, 10, 0.5, 'HP'],
+  ['slagFireDamage', 'Slag fire damage', 2, 0, 10, 0.5, 'HP'],
 ]);
 
 // size (half-widths and height), health, seconds to respawn after being destroyed, contact damage
@@ -35,8 +37,10 @@ export const entMin = (e) => [e.x - e.hx, e.y, e.z - e.hz];
 export const entMax = (e) => [e.x + e.hx, e.y + e.hy, e.z + e.hz];
 
 export const ESHOTS = [];
+export const FIRE_PATCHES = [];
 const BOSS_CORE = { x: 0, y: 2.12, z: -0.72, radius: 0.52 };
 const SHOT_RADII = [0.16, 0.36, 0.62];
+const SLAG_FLIGHT = 0.8, SLAG_GRAVITY = 18, SLAG_RADIUS = 0.32, SLAG_PATCH_LIFE = 3, SLAG_PATCH_RADIUS = 0.9;
 
 function isBossCoreHit(e, x, y, z, level) {
   const radius = BOSS_CORE.radius + (SHOT_RADII[level] ?? 0);
@@ -51,11 +55,13 @@ export function resetEnt(e) {
     e.activated = false; e.damageable = false; e.combatReady = false;
     e.introTimer = 0; e.introProgress = 0; e.phase = 0; e.introEntering = false;
     e.chargeDirZ = 0; e.chargeTargetZ = e.entryZ; e.chargeX = e.x0;
+    e.nextAttack = 'charge';
   }
 }
 export function resetEnemies() {
   for (const e of ENTS) resetEnt(e);
   ESHOTS.length = 0;
+  FIRE_PATCHES.length = 0;
 }
 
 export function activateBoss() {
@@ -65,12 +71,15 @@ export function activateBoss() {
   boss.hp = boss.maxHp; boss.introTimer = 0; boss.introProgress = 0;
   boss.combatReady = false; boss.introEntering = false; boss.chargeDirZ = 0;
   boss.chargeTargetZ = boss.entryZ; boss.chargeX = boss.x0; boss.cd = 0;
+  boss.nextAttack = 'charge';
   boss.st = 'enter'; boss.z = boss.z0; boss.yaw = Math.PI;
   return true;
 }
 
 function resetBossEncounter(e) {
   resetEnt(e);
+  for (let i = ESHOTS.length - 1; i >= 0; i--) if (ESHOTS[i].kind === 'slag') ESHOTS.splice(i, 1);
+  FIRE_PATCHES.length = 0;
   const door = LEVEL.named.bossDoor;
   if (door) {
     door.open = 0; door.triggered = false; door.openedAt = 0;
@@ -84,6 +93,37 @@ function startBossChargeTell(e) {
   e.yaw = e.chargeDirZ > 0 ? Math.PI : 0;
   e.st = 'chargeTell'; e.t2 = 0.5; e.tele = 1;
   events.push({ type: 'bosstelegraph', e, attack: 'charge' });
+}
+
+function startBossSlagTell(e) {
+  e.st = 'slagTell'; e.t2 = 0.5; e.tele = 1;
+  events.push({ type: 'bosstelegraph', e, attack: 'slag' });
+}
+
+function startBossNextTell(e) {
+  if (e.nextAttack === 'slag') startBossSlagTell(e);
+  else startBossChargeTell(e);
+}
+
+function launchBossSlag(e) {
+  const startX = e.x + BOSS_CORE.z * Math.sin(e.yaw), startY = e.y + BOSS_CORE.y;
+  const startZ = e.z + BOSS_CORE.z * Math.cos(e.yaw);
+  const targetZ = Math.max(Math.min(p.z, e.chargeFrontZ), e.chargeBackZ);
+  for (const offset of [-2, 0, 2]) {
+    const targetX = Math.max(e.chargeMinX, Math.min(e.chargeMaxX, p.x + offset));
+    const floorY = groundBelow(targetX, e.y + 8, targetZ);
+    if (!Number.isFinite(floorY)) continue;
+    const targetY = floorY + SLAG_RADIUS;
+    const vy = (targetY - startY + 0.5 * SLAG_GRAVITY * SLAG_FLIGHT * SLAG_FLIGHT) / SLAG_FLIGHT;
+    ESHOTS.push({
+      kind: 'slag', x: startX, y: startY, z: startZ,
+      vx: (targetX - startX) / SLAG_FLIGHT, vy, vz: (targetZ - startZ) / SLAG_FLIGHT,
+      life: SLAG_FLIGHT + 0.15, radius: SLAG_RADIUS, gravity: SLAG_GRAVITY,
+      targetX, targetY, targetZ,
+    });
+  }
+  events.push({ type: 'bossslag', e, x: startX, y: startY, z: startZ });
+  e.nextAttack = 'charge'; e.st = 'idle'; e.cd = 1; e.tele = 0;
 }
 
 function updateBoss(e, dt, attack) {
@@ -104,7 +144,7 @@ function updateBoss(e, dt, attack) {
 
   if (e.combatReady && attack && e.st === 'enter') {
     e.introEntering = true;
-    startBossChargeTell(e);
+    startBossNextTell(e);
   }
 
   if (e.st === 'enter') {
@@ -129,6 +169,14 @@ function updateBoss(e, dt, attack) {
       e.st = 'charge'; e.tele = 0;
       events.push({ type: 'bosscharge', e });
     }
+  } else if (e.st === 'slagTell') {
+    if (e.introEntering) {
+      const dz = e.entryZ - e.z, move = e.entrySpeed * dt;
+      if (Math.abs(dz) <= move) { e.z = e.entryZ; e.introEntering = false; }
+      else e.z += Math.sign(dz) * move;
+    }
+    e.t2 = Math.max(0, e.t2 - dt);
+    if (e.t2 <= 0 && !e.introEntering) launchBossSlag(e);
   } else if (e.st === 'charge') {
     const dz = e.chargeTargetZ - e.z, move = e.chargeSpeed * dt;
     e.x = e.chargeX;
@@ -136,10 +184,11 @@ function updateBoss(e, dt, attack) {
     if (Math.abs(dz) <= move) {
       e.z = e.chargeTargetZ; e.st = 'idle'; e.cd = 1;
       e.chargeDirZ *= -1;
+      e.nextAttack = 'slag';
     } else e.z += Math.sign(dz) * move;
   } else if (e.st === 'idle' && e.combatReady && attack) {
     e.cd -= dt;
-    if (e.cd <= 0) startBossChargeTell(e);
+    if (e.cd <= 0) startBossNextTell(e);
   }
 
   if (e.combatReady && attack) {
@@ -256,20 +305,45 @@ export function updateEnemies(dt) {
       }
     }
   }
+  for (let i = FIRE_PATCHES.length - 1; i >= 0; i--) {
+    const fire = FIRE_PATCHES[i];
+    fire.life -= dt;
+    if (fire.life <= 0) { FIRE_PATCHES.splice(i, 1); continue; }
+    const dx = p.x - fire.x, dz = p.z - fire.z;
+    if (attack && p.y <= fire.y + 0.1 && p.y + H > fire.y - 0.1 && Math.hypot(dx, dz) <= fire.radius + R) {
+      if (hurt(tuning.slagFireDamage * tuning.damageTaken, dx, dz)) events.push({ type: 'slagfirehit', x: p.x, y: fire.y, z: p.z });
+    }
+  }
   for (let i = ESHOTS.length - 1; i >= 0; i--) {
     const s = ESHOTS[i];
     s.life -= dt;
-    const dx = s.vx * dt, dy = s.vy * dt, dz = s.vz * dt;
-    const tWall = segSolids(s.x, s.y, s.z, dx, dy, dz, 0);
+    const radius = s.kind === 'slag' ? s.radius : 0;
+    const dx = s.vx * dt, dy = s.kind === 'slag' ? s.vy * dt - 0.5 * s.gravity * dt * dt : s.vy * dt, dz = s.vz * dt;
+    if (s.kind === 'slag') s.vy -= s.gravity * dt;
+    const tWall = segSolids(s.x, s.y, s.z, dx, dy, dz, radius);
     if (p.iframes <= 0 && p.dead <= 0 && p.returning <= 0) {
-      const t = rayBox(s.x, s.y, s.z, dx, dy, dz, [p.x - R, p.y, p.z - R], [p.x + R, p.y + H, p.z + R], 0.22);
+      const t = rayBox(s.x, s.y, s.z, dx, dy, dz, [p.x - R, p.y, p.z - R], [p.x + R, p.y + H, p.z + R], s.kind === 'slag' ? radius : 0.22);
       if (t <= 1 && t < tWall) {
-        hurt(2 * tuning.damageTaken, s.vx, s.vz);
-        events.push({ type: 'eshothit', x: s.x + dx * t, y: s.y + dy * t, z: s.z + dz * t });
+        const x = s.x + dx * t, y = s.y + dy * t, z = s.z + dz * t;
+        if (s.kind === 'slag') {
+          hurt(tuning.slagBlobDamage * tuning.damageTaken, s.vx, s.vz);
+          events.push({ type: 'slagblobhit', x, y, z });
+        } else {
+          hurt(2 * tuning.damageTaken, s.vx, s.vz);
+          events.push({ type: 'eshothit', x, y, z });
+        }
         ESHOTS.splice(i, 1); continue;
       }
     }
-    if (tWall <= 1) { events.push({ type: 'eshotwall', x: s.x + dx * tWall, y: s.y + dy * tWall, z: s.z + dz * tWall }); ESHOTS.splice(i, 1); continue; }
+    if (tWall <= 1) {
+      const x = s.x + dx * tWall, y = s.y + dy * tWall, z = s.z + dz * tWall;
+      const floorY = s.kind === 'slag' ? groundBelow(x, y + radius + 0.1, z) : -Infinity;
+      if (s.kind === 'slag' && dy < 0 && Number.isFinite(floorY) && y <= floorY + radius + 0.06) {
+        FIRE_PATCHES.push({ x, y: floorY + 0.04, z, life: SLAG_PATCH_LIFE, radius: SLAG_PATCH_RADIUS });
+        events.push({ type: 'slagland', x, y: floorY + 0.04, z });
+      } else events.push({ type: 'eshotwall', x, y, z });
+      ESHOTS.splice(i, 1); continue;
+    }
     s.x += dx; s.y += dy; s.z += dz;
     if (s.life <= 0) ESHOTS.splice(i, 1);
   }
