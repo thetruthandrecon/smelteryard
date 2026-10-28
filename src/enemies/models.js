@@ -107,9 +107,11 @@ function makeEntityMesh(e) {
 // called by the level builder: one model per enemy, added to the level's group
 let entVis = [];
 let slagPatchVis = [];
+let slagTargetVis = [];
 export function buildEnemyVisuals(group) {
   entVis = ENTS.map((e) => { const v = makeEntityMesh(e); group.add(v.g); return v; });
   slagPatchVis = Array.from({ length: 16 }, () => { const v = makeSlagPatch(); group.add(v.g); return v; });
+  slagTargetVis = Array.from({ length: 3 }, () => { const v = makeSlagTarget(); group.add(v.g); return v; });
 }
 
 const eshotOrbs = Array.from({ length: 24 }, () => makeOrb(0xff6a1a));
@@ -126,6 +128,20 @@ function makeSlagPatch() {
   return { g, discMat, rimMat };
 }
 
+function makeSlagTarget() {
+  const g = new THREE.Group();
+  const discMat = new THREE.MeshBasicMaterial({ color: 0x8efff0, transparent: true, opacity: 0.12, depthWrite: false, toneMapped: false });
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(0.82, 24), discMat);
+  disc.rotation.x = -Math.PI / 2; g.add(disc);
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0x8efff0, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.055, 6, 24), ringMat);
+  ring.rotation.x = Math.PI / 2; ring.position.y = 0.02; g.add(ring);
+  const cross = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.48), ringMat);
+  cross.position.y = 0.025; g.add(cross);
+  const cross2 = cross.clone(); cross2.rotation.y = Math.PI / 2; g.add(cross2);
+  return { g, discMat, ringMat };
+}
+
 export function renderEnemies() {
   const now = performance.now() / 1000;
   eshotOrbs.forEach((o, i) => {
@@ -135,6 +151,17 @@ export function renderEnemies() {
     o.core.scale.setScalar(s.kind === 'slag' ? s.radius : 0.13);
     o.halo.scale.setScalar(s.kind === 'slag' ? 1.8 + 0.18 * Math.sin(now * 30 + i) : 0.9 + 0.15 * Math.sin(now * 30 + i));
   });
+  slagTargetVis.forEach((v) => { v.g.visible = false; });
+  let slagTargetIndex = 0;
+  for (const s of ESHOTS) {
+    if (s.kind !== 'slag' || slagTargetIndex >= slagTargetVis.length) continue;
+    const i = slagTargetIndex++, v = slagTargetVis[i], pulse = 0.5 + 0.5 * Math.sin(now * 9 + i);
+    v.g.visible = true;
+    v.g.position.set(s.targetX, s.targetY - s.radius + 0.045, s.targetZ);
+    v.g.scale.setScalar(0.96 + pulse * 0.08);
+    v.discMat.opacity = 0.08 + pulse * 0.08;
+    v.ringMat.opacity = 0.68 + pulse * 0.3;
+  }
   slagPatchVis.forEach((v, i) => {
     const fire = FIRE_PATCHES[i];
     if (!fire) { v.g.visible = false; return; }
@@ -163,11 +190,11 @@ export function renderEnemies() {
       v.body.position.y = 0.8 + Math.abs(Math.cos(e.phase)) * 0.05;
     } else if (e.kind === 'boss') {
       v.g.rotation.y = e.yaw;
-      const telling = e.st === 'chargeTell' || e.st === 'slagTell';
-      const tellPulse = telling && Math.sin(now * 38) > 0 ? 1 : 0;
-      v.core.scale.setScalar(telling ? 1.06 + tellPulse * 0.28 : 1 + Math.sin(now * 8) * 0.06);
-      v.coreMat.color.setRGB(1, telling ? 0.62 + tellPulse * 0.34 : 0.24 + Math.sin(now * 5) * 0.08, telling ? 0.08 + tellPulse * 0.8 : 0.04);
-      v.visorMat.color.setRGB(1, telling ? 0.45 + tellPulse * 0.5 : 0.25, telling ? 0.2 + tellPulse * 0.7 : 0.08);
+      const chargeTell = e.st === 'chargeTell', slagTell = e.st === 'slagTell', telling = chargeTell || slagTell;
+      const tellPulse = chargeTell ? (Math.sin(now * 38) > 0 ? 1 : 0) : slagTell ? 0.5 + 0.5 * Math.sin(now * 10) : 0;
+      v.core.scale.setScalar(chargeTell ? 1.06 + tellPulse * 0.28 : slagTell ? 1.12 + tellPulse * 0.16 : 1 + Math.sin(now * 8) * 0.06);
+      v.coreMat.color.setRGB(slagTell ? 0.08 : 1, slagTell ? 0.72 + tellPulse * 0.2 : telling ? 0.62 + tellPulse * 0.34 : 0.24 + Math.sin(now * 5) * 0.08, slagTell ? 0.78 + tellPulse * 0.22 : telling ? 0.08 + tellPulse * 0.8 : 0.04);
+      v.visorMat.color.setRGB(slagTell ? 0.08 : 1, slagTell ? 0.68 + tellPulse * 0.22 : telling ? 0.45 + tellPulse * 0.5 : 0.25, slagTell ? 0.78 + tellPulse * 0.22 : telling ? 0.2 + tellPulse * 0.7 : 0.08);
       if (e.st === 'charge') emit(e.x, e.y + 0.3, e.z, 0, 0.15, -e.chargeDirZ * 1.5, 0.24, C_MOLTEN, 0);
     } else if (e.kind === 'flyer') {
       v.g.rotation.y = e.yaw;
@@ -190,6 +217,7 @@ const sfx = {
   efire: (v) => tone(300, 160, 0.12, 'square', 0.06 * v),
   swoop: (v) => { hiss(0.4, 600, 2600, 0.16 * v); tone(260, 520, 0.35, 'sawtooth', 0.04 * v); },
   bossTell: (v) => { tone(220, 900, 0.42, 'sawtooth', 0.14 * v); hiss(0.45, 800, 2800, 0.16 * v); },
+  slagTell: (v) => { tone(620, 390, 0.38, 'sine', 0.14 * v); tone(940, 690, 0.26, 'triangle', 0.08 * v, 0.1); },
   bossCharge: (v) => { tone(130, 52, 0.24, 'sawtooth', 0.18 * v); hiss(0.65, 1500, 100, 0.24 * v); },
   slagLand: (v) => { tone(170, 70, 0.2, 'square', 0.12 * v); hiss(0.25, 1100, 260, 0.15 * v); },
   bossImpact: (v) => { tone(88, 40, 0.2, 'square', 0.2 * v); hiss(0.18, 1200, 180, 0.16 * v); },
@@ -201,7 +229,16 @@ on('eshotwall', (e) => { burst(e.x, e.y, e.z, 8, 3, C_MOLTEN, { up: 0.6, grav: 6
 on('eshothit', (e) => { burst(e.x, e.y, e.z, 14, 4, C_RED, { up: 0.8, grav: 6, life: 0.35 }); });
 on('touch', (e) => { burst(e.x, e.y, e.z, 12, 3, C_RED, { up: 0.8, grav: 6, life: 0.3 }); });
 on('swoop', ({ e }) => { sfx.swoop(near(e.x, e.y, e.z, 25)); });
-on('bosstelegraph', ({ e }) => { burst(e.x, e.y + 2.1, e.z, 20, 3, C_AMBER, { up: 0.7, grav: 1, life: 0.4 }); sfx.bossTell(near(e.x, e.y, e.z, 35)); });
+on('bosstelegraph', ({ e, attack }) => {
+  if (attack === 'slag') {
+    burst(e.x, e.y + 2.1, e.z, 22, 3, C_TEAL, { up: 0.7, grav: 1, life: 0.5 });
+    burst(e.x, e.y + 2.1, e.z, 8, 1.5, C_WHITE, { up: 0.4, grav: 0, life: 0.3 });
+    sfx.slagTell(near(e.x, e.y, e.z, 35));
+  } else {
+    burst(e.x, e.y + 2.1, e.z, 20, 3, C_AMBER, { up: 0.7, grav: 1, life: 0.4 });
+    sfx.bossTell(near(e.x, e.y, e.z, 35));
+  }
+});
 on('bosscharge', ({ e }) => { burst(e.x, e.y + 0.35, e.z, 26, 5, C_MOLTEN, { up: 0.8, grav: 7, life: 0.4, dirZ: -e.chargeDirZ }); sfx.bossCharge(near(e.x, e.y, e.z, 35)); });
 on('bossslag', (e) => { burst(e.x, e.y, e.z, 18, 4, C_MOLTEN, { up: 1.1, grav: 3, life: 0.45 }); });
 on('slagland', (e) => { burst(e.x, e.y, e.z, 14, 3, C_MOLTEN, { up: 0.8, grav: 7, life: 0.4 }); sfx.slagLand(near(e.x, e.y, e.z, 35)); });

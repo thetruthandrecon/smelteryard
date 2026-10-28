@@ -75,7 +75,7 @@ module.exports = {
       const slagTargetZ = boss.z + 8;
       placeAt({ x: 0.5, y: boss.y, z: slagTargetZ });
       eventStart = G.events.length; run(0.02);
-      const slagTargets = ESHOTS.filter((s) => s.kind === 'slag').map((s) => ({ x: s.targetX, z: s.targetZ }));
+      const slagTargets = G.ESHOTS.filter((s) => s.kind === 'slag').map((s) => ({ x: s.targetX, z: s.targetZ }));
       out.bossSlagVolley = { warned: slagWarned, tellHeld: slagTellHeld, count: slagTargets.length, targetXs: slagTargets.map((s) => +s.x.toFixed(1)).sort((a, b) => a - b), targetZs: slagTargets.map((s) => +s.z.toFixed(1)), nextAttack: boss.nextAttack };
       placeAt({ x: 4, y: boss.y, z: slagTargetZ + 4 });
       run(0.75);
