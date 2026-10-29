@@ -14,18 +14,20 @@ const ui = { timer: $('timer'), cp: $('cp-label'), best: $('best-label'), pipDas
 const hpSegs = [];
 for (let i = 0; i < MAX_HP; i++) { const s = document.createElement('i'); $('hp-bar').appendChild(s); hpSegs.push(s); }
 let shownHp = -1, toastTimer = 0, hitTimer = 0, fpsFrames = 0, fpsTime = 0;
+let runFromStart = false;
 
 export function toast(text, molten = false) { ui.toast.textContent = text; ui.toast.classList.toggle('molten', molten); ui.toast.classList.add('show'); toastTimer = 1.6; }
 // a quick vignette: 'hurt' is red, anything else is the orange lava flash
 export function flash(kind = 'fall') { ui.flash.classList.toggle('hurt', kind === 'hurt'); ui.flash.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => ui.flash.classList.remove('on'))); }
 function updateSoundLabel() { $('sound-label').textContent = isMuted() ? 'Sound off · M' : 'Sound on · M'; }
-const bestKey = () => `smelter-yard:best:${LEVEL.id}:v3`;
+const bestKey = () => `smelter-yard:best:${LEVEL.id}:v4`;
 function updateBestLabel() { ui.best.textContent = state.best != null ? `Best ${fmtTime(state.best)}` : 'No best yet'; }
 function showOverlay(id) { for (const o of ['ov-start', 'ov-pause', 'ov-clear', 'ov-over', 'ov-win']) $(o).hidden = o !== id; }
 
 // start or resume play; restart = from the beginning; levelId switches level first
 export function beginPlay(restart, levelId, checkpointIndex = 0) {
   ensureAudio();
+  if (restart || levelId || checkpointIndex > 0 || state.mode === 'start') runFromStart = checkpointIndex === 0;
   if (levelId && levelId !== LEVEL.id) loadLevel(levelId);
   else if (restart) restartCourse();
   if (checkpointIndex > 0 && CHECKPOINTS[checkpointIndex]) {
@@ -96,13 +98,14 @@ on('bossdefeat', onBossDefeat);
 
 function onClear() {
   const t = state.time;
-  const isBest = state.best == null || t < state.best;
+  const eligible = runFromStart && state.mode === 'play';
+  const isBest = eligible && (state.best == null || t < state.best);
   if (isBest) { state.best = t; store.set(bestKey(), t); }
   updateBestLabel();
   const G0 = LEVEL.goal;
   $('clear-time').textContent = fmtTime(t);
   const plural = (n, one, many) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
-  const parts = [isBest ? 'New best time' : `Best ${fmtTime(state.best)}`, `${plural(state.lives, 'life', 'lives')} left of ${tuning.lives}`, plural(state.kills, 'enemy destroyed', 'enemies destroyed')];
+  const parts = [eligible ? (isBest ? 'New best time' : `Best ${fmtTime(state.best)}`) : 'Practice run', `${plural(state.lives, 'life', 'lives')} left of ${tuning.lives}`, plural(state.kills, 'enemy destroyed', 'enemies destroyed')];
   $('clear-detail').textContent = `${parts.join(' · ')}.`;
   $('clear-title').textContent = G0.kind === 'door' ? 'Boss door reached' : 'Course clear';
   $('clear-note').textContent = G0.kind === 'door'
@@ -114,11 +117,12 @@ function onClear() {
 }
 function onBossDefeat() {
   const t = state.time;
-  const isBest = state.best == null || t < state.best;
+  const eligible = runFromStart && state.mode === 'play';
+  const isBest = eligible && (state.best == null || t < state.best);
   if (isBest) { state.best = t; store.set(bestKey(), t); }
   updateBestLabel();
   $('win-time').textContent = fmtTime(t);
-  $('win-detail').textContent = `${isBest ? 'New best time' : `Best ${fmtTime(state.best)}`} · ${state.lives} ${state.lives === 1 ? 'life' : 'lives'} left.`;
+  $('win-detail').textContent = `${eligible ? (isBest ? 'New best time' : `Best ${fmtTime(state.best)}`) : 'Practice win'} · ${state.lives} ${state.lives === 1 ? 'life' : 'lives'} left.`;
   state.mode = 'win'; releaseAll(); releasePointer();
   setTimeout(() => { if (state.mode === 'win') showOverlay('ov-win'); }, 850);
 }

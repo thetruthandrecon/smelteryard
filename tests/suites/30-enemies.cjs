@@ -309,6 +309,42 @@ module.exports = {
     }));
     log('Warden win screen', win);
     expect(win.visible && win.title === 'Forge Warden defeated' && /^\d+:\d\d\.\d\d$/.test(win.time), 'the win screen should show after the defeat explosion');
+    const bestTime = await page.evaluate(async () => {
+      const G = window.__game;
+      const { beginPlay } = await import('/src/ui/ui.js');
+      const { damageEnt } = await import('/src/enemies/enemies.js');
+      const { dispatchEvents } = await import('/src/core/world.js');
+      const { store } = await import('/src/core/util.js');
+      const oldKey = 'smelter-yard:best:smelter:v3';
+      const key = 'smelter-yard:best:smelter:v4';
+      const priorOld = store.get(oldKey, null), priorBest = store.get(key, null);
+      store.set(oldKey, 5.7); store.set(key, null);
+      G.loadLevel('yard'); dispatchEvents();
+      G.loadLevel('smelter'); dispatchEvents();
+      const legacyIgnored = G.state.best === null && document.getElementById('best-label').textContent === 'No best yet';
+      store.set(key, 100);
+      G.loadLevel('yard'); dispatchEvents();
+      G.loadLevel('smelter'); dispatchEvents();
+      const defeat = (time) => {
+        const boss = G.ENTS.find((e) => e.kind === 'boss');
+        boss.activated = boss.alive = boss.damageable = boss.combatReady = true;
+        boss.hp = 1; G.state.time = time; G.state.timing = true;
+        damageEnt(boss, 1, boss.x, boss.y + 0.5, boss.z + boss.hz, 0);
+        dispatchEvents();
+        return { detail: document.getElementById('win-detail').textContent, best: G.state.best, saved: store.get(key, null) };
+      };
+      beginPlay(true, 'smelter', 3);
+      const practice = defeat(5.7);
+      beginPlay(true, 'smelter', 0);
+      const full = defeat(90);
+      store.set(oldKey, priorOld); store.set(key, priorBest);
+      return { legacyIgnored, practice, full };
+    });
+    log('Boss practice best-time guard', bestTime);
+    expect(bestTime.legacyIgnored, 'the old v3 best-time value should be ignored');
+    expect(bestTime.practice.best === 100 && bestTime.practice.saved === 100 && bestTime.practice.detail.includes('Practice win') && !bestTime.practice.detail.includes('New best') && !bestTime.practice.detail.includes('Best '), 'a quick practice win should neither compare nor replace the full-stage best time');
+    expect(bestTime.full.best === 90 && bestTime.full.saved === 90 && bestTime.full.detail.includes('New best time'), 'a full-stage win should still record a new best time');
+
 
   },
 };
