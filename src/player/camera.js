@@ -1,5 +1,5 @@
 // The over-the-shoulder camera: follows the player, pulls in when a wall is behind, shakes on impacts.
-import { SOLIDS, cam, on } from '../core/world.js';
+import { SOLIDS, ENTS, cam, on } from '../core/world.js';
 import { tuning, defineTuning } from '../core/tuning.js';
 import { damp } from '../core/util.js';
 import { camera } from '../core/render.js';
@@ -14,6 +14,7 @@ defineTuning('Camera', [
   ['fov', 'Field of view', 70, 55, 95, 1, '°'],
   ['invertY', 'Invert look up and down', false],
   ['slamShake', 'Boss slam shake', 0.35, 0, 1, 0.05, ''],
+  ['roarShake', 'Phase 2 roar shake', 0.3, 0, 1, 0.05, ''],
 ]);
 camera.fov = tuning.fov; camera.updateProjectionMatrix();
 
@@ -26,6 +27,12 @@ export function resetView() { camState.fy = null; cam.yaw = 0; cam.pitch = -0.2;
 on('restart', () => { camState.fy = null; });
 // the Warden's ground pound shakes the whole arena (0 in the tuning panel turns it off)
 on('bossgroundslam', () => { if (tuning.slamShake > 0) shake(tuning.slamShake); });
+// the Warden's Phase 2 roar: a jolt when it starts, then a rumble at half strength while it powers up
+on('bossphase2', () => { if (tuning.roarShake > 0) shake(tuning.roarShake); });
+function roarRumble() {
+  if (tuning.roarShake <= 0) return;
+  for (const e of ENTS) if (e.kind === 'boss' && e.alive && e.st === 'phaseTransition') shake(tuning.roarShake * 0.5);
+}
 
 export function updateCamera(dt, ix, iy, iz) {
   const T = tuning;
@@ -43,6 +50,7 @@ export function updateCamera(dt, ix, iy, iz) {
   camState.dist = want < camState.dist ? want : damp(camState.dist, want, 5, dt);
   const k = camState.dist / full;
   camState.shake = Math.max(0, camState.shake - dt);
+  roarRumble();
   const sh = reduceMotion ? 0 : camState.shake * 0.5;
   camera.position.set(hx + dx * k + (Math.random() - 0.5) * sh, hy + dy * k + (Math.random() - 0.5) * sh, hz + dz * k + (Math.random() - 0.5) * sh);
   camera.lookAt(sx + fx * 30, hy + fy * 30, sz + fz * 30);

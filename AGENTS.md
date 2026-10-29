@@ -114,6 +114,10 @@ Either AI may add a line here when H states a decision; mention it in the PR.
   - Charged shots must beat tapping for the same time: level 1 = 4, level 2 = 12 damage (a tap is 1), adjustable in the tuning panel.
   - The Warden's glowing core is a weak spot: hits there do more damage than body hits.
   - Soft lock-on for the boss: yes.
+- 2026-10-29:
+  - Below half health the Warden pauses for a short power-up (about 2 s) in which it can't be hurt, then fights slightly faster (default 1.33×). Every attack keeps its 0.5 s tell.
+  - The camera shakes when the Warden slams and when it roars into Phase 2 (sliders in Tuning → Camera).
+  - A practice win doesn't count as a Smelter Yard best time.
 
 ## Milestone 6: the boss (Forge Warden, working name)
 A heavy furnace mech with a glowing core, in an arena behind the boss door at the end of Smelter Yard.

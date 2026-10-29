@@ -72,7 +72,7 @@ module.exports = {
       const { hitFeedback } = await import('/src/combat/shots.js');
       const { dispatchEvents } = await import('/src/core/world.js');
       const G = window.__game; const { state, STEP, placeAt, ENTS, cam, input, tuning } = G; const { run } = window.__t;
-      G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse();
+      G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse(); G.step(STEP); // one step before the run starts resets the boss door
       // start just inside the arena door: that both opens the door and starts the fight
       state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -216.2 }); G.step(STEP); run(3.2);
       const boss = ENTS.find((e) => e.kind === 'boss');
