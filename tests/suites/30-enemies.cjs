@@ -237,18 +237,44 @@ module.exports = {
       const bodyHit = () => [boss.x, boss.y + 0.5, boss.z + boss.hz];
       boss.hp = 50;
       const phaseAtHalf = boss.phaseTwo;
+      boss.st = 'chargeTell'; boss.t2 = 0.4;
       let eventStart = G.events.length;
       damageEnt(boss, 1, ...bodyHit(), 0);
       const phaseEvent = G.events.slice(eventStart).some((e) => e.type === 'bossphase2');
-      const switchedBelowHalf = boss.phaseTwo && boss.hp === 49;
+      const cancelledTell = boss.st === 'phaseTransition' && boss.t2 === 0;
+      const switchedBelowHalf = boss.phaseTwo && boss.hp === 49 && !boss.damageable;
+      const hpBeforeBlocked = boss.hp;
+      eventStart = G.events.length;
+      damageEnt(boss, 10, ...bodyHit(), 0);
+      const blocked = boss.hp === hpBeforeBlocked && G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked);
+      eventStart = G.events.length;
+      run(1.75);
+      const held = boss.st === 'phaseTransition' && !boss.damageable &&
+        !G.events.slice(eventStart).some((e) => ['bosscharge', 'bossslag', 'bossgroundslam'].includes(e.type));
+      run(0.35);
+      const resumed = boss.st === 'idle' && boss.damageable && boss.phaseTransitionTimer === 0;
 
-      // Phase 2 Charge crosses the lane faster and leaves touchable fire.
+      // A Charge already moving finishes at its original speed before the pause.
+      boss.phaseTwo = false; boss.phaseTwoPending = false; boss.damageable = true; boss.hp = 50;
       boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
       boss.chargeDirZ = 1; boss.chargeTargetZ = boss.chargeFrontZ; boss.fireTrailDistance = 0;
+      FIRE_PATCHES.length = 0;
       G.placeAt({ x: 4, y: 28, z: -220 }); G.p.iframes = 99;
+      damageEnt(boss, 1, ...bodyHit(), 0);
+      const chargeContinues = boss.st === 'charge' && boss.phaseTwoPending && !boss.phaseTwo;
+      const beforePhaseOneZ = boss.z; G.step(G.STEP);
+      const originalChargeStep = boss.z - beforePhaseOneZ;
+      run(0.8);
+      const chargeThenTransition = boss.st === 'phaseTransition' && boss.phaseTwo && !boss.damageable &&
+        FIRE_PATCHES.filter((fire) => fire.source === 'charge').length === 0;
+      run(2.1);
+
+      // The one Phase 2 multiplier speeds Charge, Slag flight, wave and recovery.
+      boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
+      boss.chargeDirZ = 1; boss.chargeTargetZ = boss.chargeFrontZ; boss.fireTrailDistance = 0;
       G.state.noEnemies = false;
       const beforeZ = boss.z; G.step(G.STEP);
-      const chargeStep = +(boss.z - beforeZ).toFixed(3);
+      const chargeStep = boss.z - beforeZ;
       run(0.25);
       const trail = FIRE_PATCHES.filter((fire) => fire.source === 'charge');
       const fire = trail[0], fireLife = fire?.life ?? 0;
@@ -260,16 +286,22 @@ module.exports = {
         fireDamage = 16 - G.p.hp;
         fireHit = G.events.slice(eventStart).some((e) => e.type === 'bossfirehit');
       }
-      G.state.noEnemies = true;
+      G.state.noEnemies = true; G.p.iframes = 99;
       run(0.6);
       const recovery = boss.cd;
 
-      // The core opens on the slam; only core hits gain the 2x window.
+      FIRE_PATCHES.length = 0;
+      boss.st = 'slagTell'; boss.t2 = G.STEP; boss.z = -231; boss.yaw = Math.PI;
+      G.placeAt({ x: 0, y: 28, z: -223 }); G.step(G.STEP);
+      const slag = G.ESHOTS.find((s) => s.kind === 'slag');
+      const slagFlight = slag ? slag.life + G.STEP - 0.15 : 0;
+      G.ESHOTS.length = 0;
       boss.st = 'groundTell'; boss.t2 = G.STEP; boss.groundWaveDirZ = 1;
       boss.z = -231; boss.yaw = Math.PI; boss.hp = 49;
       G.events.length = 0; G.step(G.STEP);
       const slam = G.events.some((e) => e.type === 'bossgroundslam');
       const opened = G.events.some((e) => e.type === 'bosscoreopen');
+      const waveSpeed = G.GROUND_WAVES[0]?.speed ?? 0;
       const openTime = boss.coreOpenTimer;
       const corePoint = [boss.x, boss.y + 2.12, boss.z + 0.72];
       const hpBeforeOpen = boss.hp;
@@ -281,26 +313,42 @@ module.exports = {
       damageEnt(boss, 2, ...corePoint, 0);
       const closedDamage = hpBeforeClosed - boss.hp;
 
-      // A final body hit stops the encounter and dispatches the win screen.
       boss.hp = 1; G.events.length = 0;
       const killed = damageEnt(boss, 1, ...bodyHit(), 0);
       const explosion = G.events.some((e) => e.type === 'bossdefeat');
       const cleared = G.state.cleared && !G.state.timing;
       dispatchEvents();
       return {
-        tuning: { speed: G.tuning.bossPhase2Speed, openTime: G.tuning.bossCoreOpenDuration },
-        phaseAtHalf, phaseEvent, switchedBelowHalf, chargeStep, recovery,
+        tuning: { transition: G.tuning.bossPhaseTransitionTime, speed: G.tuning.bossPhase2SpeedMult,
+          charge: boss.chargeSpeed, wave: G.tuning.groundWaveSpeed, openTime: G.tuning.bossCoreOpenDuration },
+        phaseAtHalf, phaseEvent, cancelledTell, switchedBelowHalf, blocked, held, resumed,
+        chargeContinues, originalChargeStep, chargeThenTransition, chargeStep, recovery, slagFlight, waveSpeed,
         fire: { count: trail.length, life: fireLife, damage: fireDamage, hit: fireHit },
         core: { slam, opened, openTime, openDamage, closed, closedDamage },
         defeat: { killed, explosion, cleared, mode: G.state.mode },
       };
     });
-    log('Warden phase 2 and defeat', phaseTwo);
-    expect(!phaseTwo.phaseAtHalf && phaseTwo.phaseEvent && phaseTwo.switchedBelowHalf, 'Phase 2 should begin below, not at, 50% HP');
-    expect(phaseTwo.tuning.speed === 24 && phaseTwo.tuning.openTime === 2.5 && Math.abs(phaseTwo.chargeStep - phaseTwo.tuning.speed / 120) < 0.01 && phaseTwo.recovery === 0.75, 'Phase 2 Charge should use its 24 m/s tuning default');
-    expect(phaseTwo.fire.count >= 4 && phaseTwo.fire.life > 2 && phaseTwo.fire.damage === 2 && phaseTwo.fire.hit, 'Phase 2 Charge should leave three-second fire that deals the tuned fire damage on touch');
-    expect(phaseTwo.core.slam && phaseTwo.core.opened && phaseTwo.core.openTime === 2.5 && phaseTwo.core.openDamage === 8 && phaseTwo.core.closed && phaseTwo.core.closedDamage === 3, 'Ground Pound should open the core for 2x damage, then return to the normal 1.5x weak spot');
-    expect(phaseTwo.defeat.killed && phaseTwo.defeat.explosion && phaseTwo.defeat.cleared && phaseTwo.defeat.mode === 'win', 'defeating the Warden should emit its explosion and end the fight');
+    log('Warden phase 2 transition and defeat', phaseTwo);
+    expect(!phaseTwo.phaseAtHalf && phaseTwo.phaseEvent && phaseTwo.cancelledTell && phaseTwo.switchedBelowHalf,
+      'Phase 2 should cancel a tell and enter its invulnerable transition below, not at, 50% HP');
+    expect(phaseTwo.tuning.transition === 2 && phaseTwo.blocked && phaseTwo.held && phaseTwo.resumed,
+      'the 2 s transition should ping blocked shots and pause attacks until it finishes');
+    expect(phaseTwo.chargeContinues && phaseTwo.chargeThenTransition &&
+      Math.abs(phaseTwo.originalChargeStep - phaseTwo.tuning.charge / 120) < 0.01,
+      'an active Charge should finish at its original speed before the Phase 2 transition');
+    expect(phaseTwo.tuning.speed === 1.33 && phaseTwo.tuning.openTime === 2.5 &&
+      Math.abs(phaseTwo.chargeStep - phaseTwo.tuning.charge * phaseTwo.tuning.speed / 120) < 0.01 &&
+      Math.abs(phaseTwo.recovery - 1 / phaseTwo.tuning.speed) < 0.02 &&
+      Math.abs(phaseTwo.slagFlight - 0.8 / phaseTwo.tuning.speed) < 0.02 &&
+      Math.abs(phaseTwo.waveSpeed - phaseTwo.tuning.wave * phaseTwo.tuning.speed) < 0.01,
+      'one Phase 2 slider should scale Charge, Slag flight, Ground wave and recovery');
+    expect(phaseTwo.fire.count >= 4 && phaseTwo.fire.life > 2 && phaseTwo.fire.damage === 2 && phaseTwo.fire.hit,
+      'Phase 2 Charge should leave three-second fire that deals the tuned fire damage on touch');
+    expect(phaseTwo.core.slam && phaseTwo.core.opened && phaseTwo.core.openTime === 2.5 &&
+      phaseTwo.core.openDamage === 8 && phaseTwo.core.closed && phaseTwo.core.closedDamage === 3,
+      'Ground Pound should open the core for 2x damage, then return to the normal 1.5x weak spot');
+    expect(phaseTwo.defeat.killed && phaseTwo.defeat.explosion && phaseTwo.defeat.cleared && phaseTwo.defeat.mode === 'win',
+      'defeating the Warden should emit its explosion and end the fight');
     await page.waitForFunction(() => !document.getElementById('ov-win').hidden, null, { timeout: 3000 });
     const win = await page.evaluate(() => ({
       title: document.getElementById('win-title').textContent,

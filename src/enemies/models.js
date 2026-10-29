@@ -227,6 +227,13 @@ export function renderEnemies() {
       v.body.position.y = 0.8 + Math.abs(Math.cos(e.phase)) * 0.05;
     } else if (e.kind === 'boss') {
       v.g.rotation.y = e.yaw;
+      const phaseTransition = e.st === 'phaseTransition';
+      v.g.rotation.z = phaseTransition ? Math.sin(e.phase * 2) * 0.075 : 0;
+      if (phaseTransition) {
+        v.g.position.y += Math.abs(Math.sin(e.phase * 2)) * 0.24;
+        emit(e.x + (Math.random() - 0.5) * 1.5, e.y + 1.7 + Math.random() * 1.3, e.z + (Math.random() - 0.5) * 1.2,
+          (Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.5) * 2, 0.3, C_AMBER, 5);
+      }
       const chargeTell = e.st === 'chargeTell', slagTell = e.st === 'slagTell', groundTell = e.st === 'groundTell';
       const rear = groundTell ? Math.min(1, (0.5 - e.t2) * 3.2) : 0;
       v.g.position.y += rear * 0.85;
@@ -250,6 +257,12 @@ export function renderEnemies() {
       if (e.phaseTwo && !telling) v.visorMat.color.setRGB(1, 0.16, 0.08);
       if (coreOpen) v.coreMat.color.setRGB(1, 0.92, 0.52);
       else if (e.phaseTwo && !telling) v.coreMat.color.setRGB(1, 0.22, 0.07);
+      if (phaseTransition) {
+        const flash = Math.sin(now * 46) > 0 ? 1 : 0;
+        v.core.scale.setScalar(1.18 + flash * 0.45);
+        v.coreMat.color.setRGB(1, 0.2 + flash * 0.78, 0.06 + flash * 0.82);
+        v.visorMat.color.setRGB(1, 0.15 + flash * 0.65, 0.08 + flash * 0.55);
+      }
       if (e.st === 'charge') emit(e.x, e.y + 0.3, e.z, 0, 0.15, -e.chargeDirZ * 1.5, 0.24, C_MOLTEN, 0);
     } else if (e.kind === 'flyer') {
       v.g.rotation.y = e.yaw;
@@ -278,7 +291,7 @@ const sfx = {
   groundSlam: (v) => { tone(100, 38, 0.34, 'sine', 0.28 * v); hiss(0.28, 700, 90, 0.16 * v); },
   slagLand: (v) => { tone(170, 70, 0.2, 'square', 0.12 * v); hiss(0.25, 1100, 260, 0.15 * v); },
   bossImpact: (v) => { tone(88, 40, 0.2, 'square', 0.2 * v); hiss(0.18, 1200, 180, 0.16 * v); },
-  phaseTwo: (v) => { tone(180, 70, 0.6, 'sawtooth', 0.16 * v); hiss(0.45, 500, 2300, 0.15 * v); },
+  phaseTwo: (v) => { tone(190, 42, 1.5, 'sawtooth', 0.22 * v); tone(90, 36, 1.65, 'sine', 0.17 * v); hiss(1.2, 900, 100, 0.17 * v); },
   coreOpen: (v) => { tone(520, 960, 0.25, 'triangle', 0.15 * v); },
   bossDefeat: (v) => { tone(160, 32, 0.9, 'sawtooth', 0.26 * v); hiss(0.8, 2800, 80, 0.26 * v); },
 };
@@ -309,7 +322,7 @@ on('slagland', (e) => { burst(e.x, e.y, e.z, 14, 3, C_MOLTEN, { up: 0.8, grav: 7
 on('slagblobhit', (e) => { burst(e.x, e.y, e.z, 18, 4, C_AMBER, { up: 0.9, grav: 7, life: 0.35 }); });
 on('slagfirehit', (e) => { burst(e.x, e.y, e.z, 12, 3, C_RED, { up: 0.8, grav: 7, life: 0.3 }); });
 on('bossfirehit', (e) => { burst(e.x, e.y, e.z, 14, 4, C_MOLTEN, { up: 0.8, grav: 7, life: 0.35 }); });
-on('bossphase2', (e) => { burst(e.x, e.y, e.z, 80, 6, C_RED, { up: 1.6, grav: 3, life: 0.8 }); sfx.phaseTwo(near(e.x, e.y, e.z, 35)); });
+on('bossphase2', (e) => { burst(e.x, e.y, e.z, 80, 6, C_RED, { up: 1.6, grav: 3, life: 0.8 }); burst(e.x, e.y, e.z, 48, 7, C_AMBER, { up: 1.8, grav: 4, life: 1.1 }); sfx.phaseTwo(near(e.x, e.y, e.z, 35)); });
 on('bosscoreopen', (e) => { burst(e.x, e.y, e.z, 30, 4, C_WHITE, { up: 0.8, grav: 1, life: 0.45 }); sfx.coreOpen(near(e.x, e.y, e.z, 35)); });
 on('bossdefeat', (e) => {
   burst(e.x, e.y, e.z, 130, 9, C_MOLTEN, { up: 2.4, grav: 5, life: 1.1 });
