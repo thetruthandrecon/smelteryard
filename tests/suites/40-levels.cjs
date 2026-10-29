@@ -75,15 +75,43 @@ module.exports = {
     expect(sm.inactiveBossSpawns === 0, 'an inactive boss should not emit respawn events');
     expect(sm.belt.grounded && Math.abs(sm.belt.pushed - 1.75) < 0.1 && sm.belt.offEdgeIsLava && sm.belt.leanHolds, 'conveyor belt: push 3.5 m/s, lava off the edge, leaning holds you');
     expect(Math.abs(sm.cycle.aFar + 176.5) < 0.05 && Math.abs(sm.cycle.bMid) < 0.05 && Math.abs(sm.cycle.cLowTop - 25) < 0.05, 'the three conveyor platforms should stay in sync');
-    expect(sm.door.triggered && sm.door.bossActivated && !sm.door.cleared, 'reaching the boss door should activate the arena during the simulation step without clearing the stage');
+    expect(sm.door.triggered && !sm.door.bossActivated && !sm.door.cleared, 'approaching the boss door should open it without starting the fight or clearing the stage');
 
-    const arena = await page.evaluate(() => {
-      const G = window.__game; const boss = G.ENTS.find((e) => e.kind === 'boss');
+    const doorway = await page.evaluate(() => {
+      const G = window.__game, boss = G.ENTS.find((e) => e.kind === 'boss');
+      const door = G.LEVEL.named.bossDoor;
+      G.state.noEnemies = false;
+      G.placeAt({ x: 0, y: 28, z: -214 });
+      let activatedDuringWait = false, attackingDuringWait = false;
+      window.__t.run(12, () => {
+        activatedDuringWait ||= boss.activated;
+        attackingDuringWait ||= ['tellCharge', 'charge', 'tellSlag', 'slag', 'tellGround', 'ground'].includes(boss.st);
+      });
+      return { doorOpen: door.open === 1, activatedDuringWait, attackingDuringWait, bossActivated: boss.activated };
+    });
+    log('Boss doorway wait', doorway);
+    expect(doorway.doorOpen && !doorway.activatedDuringWait && !doorway.attackingDuringWait && !doorway.bossActivated, 'standing in the doorway should leave the door open without starting the Warden or its attacks');
+
+    const doorSeal = await page.evaluate(async () => {
+      const G = window.__game, door = G.LEVEL.named.bossDoor, boss = G.ENTS.find((e) => e.kind === 'boss');
+      const { moveAxis } = await import('/src/player/physics.js');
+      Object.assign(G.input, { moveX: 0, moveY: 0, jumpHeld: false, dashHeld: false, fireHeld: false });
+      G.placeAt({ x: 0, y: 28, z: -216.2 });
+      G.step(G.STEP);
+      const openWhileSliding = door.open > 0;
+      const solidImmediately = door.min[1] === door.closedMin[1] && door.max[1] === door.closedMax[1];
+      let collision = false;
+      for (let i = 0; i < 20; i++) collision = moveAxis(2, 0.1) > 0 || collision;
+      const remainsInside = G.p.z < door.min[2];
+      G.placeAt({ x: 0, y: 28, z: -216.2 });
       window.__t.run(3.1);
       return {
-        doorOpen: G.LEVEL.named.bossDoor.open === 1,
-        stageStillActive: !G.state.cleared,
         bossActivated: boss.activated,
+        bossReady: boss.combatReady,
+        enteredArena: door.enteredArena,
+        openWhileSliding, solidImmediately, collision: collision > 0, remainsInside,
+        doorClosed: door.open === 0 && door.min[1] === door.closedMin[1] && door.max[1] === door.closedMax[1],
+        stageStillActive: !G.state.cleared,
         bossWalkedIn: boss.z > boss.z0,
         introFilled: boss.introProgress === 1,
         bossDamageable: boss.damageable,
@@ -94,9 +122,9 @@ module.exports = {
       return !document.getElementById('boss-hud').hidden && track && track.getAttribute('aria-valuenow') === '100';
     }, null, { timeout: 10000 });
     const bossHud = await page.evaluate(() => ({ hidden: document.getElementById('boss-hud').hidden, value: document.querySelector('.boss-track').getAttribute('aria-valuenow') }));
-    log('Boss arena intro', { ...arena, bossHud });
-    expect(arena.doorOpen && arena.stageStillActive && arena.bossActivated && arena.bossWalkedIn && arena.introFilled, 'opening the boss door should reveal the entering boss and fill its intro bar');
-    expect(arena.bossDamageable, 'the boss should become damageable when its intro bar fills');
+    log('Boss arena entry and door seal', { ...doorSeal, bossHud });
+    expect(doorSeal.enteredArena && doorSeal.bossActivated && doorSeal.openWhileSliding && doorSeal.solidImmediately && doorSeal.collision && doorSeal.remainsInside && doorSeal.doorClosed, 'turning back immediately after entering should leave the player inside while the door slides shut');
+    expect(doorSeal.stageStillActive && doorSeal.bossWalkedIn && doorSeal.introFilled && doorSeal.bossReady && doorSeal.bossDamageable, 'entering the arena should start the Warden intro and fill its health bar');
     expect(!bossHud.hidden && bossHud.value === '100', 'the boss health bar should stay visible and full after its intro');
 
     const deathReset = await page.evaluate(() => {
@@ -108,10 +136,10 @@ module.exports = {
       return {
         playerDied: G.p.dead > 0,
         bossReset: !boss.activated && !boss.alive && boss.hp === boss.maxHp,
-        doorClosed: door.open === 0 && !door.triggered && door.min[1] === door.closedMin[1] && door.max[1] === door.closedMax[1],
+        doorOpenAgain: door.open === 1 && !door.triggered && door.min[1] === door.closedMin[1] + 5.2 && door.max[1] === door.closedMax[1] + 5.2,
       };
     });
     log('Boss arena reset after death', deathReset);
-    expect(deathReset.playerDied && deathReset.bossReset && deathReset.doorClosed, 'dying during the boss fight should reset the boss and close the arena door');
+    expect(deathReset.playerDied && deathReset.bossReset && deathReset.doorOpenAgain, 'dying during the boss fight should reset the boss and reopen the arena door');
   },
 };

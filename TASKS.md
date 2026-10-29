@@ -41,12 +41,14 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Boss door seals the arena on entry and reopens on reset; doorway waiting and immediate turnback are covered by passing Codex suites (branch `codex/boss-door-close`; PR #15)
 - Milestone 6, item 1: boss-door arena, deterministic Forge Warden activation, entrance and filling health bar; added one-click arena practice start and fixed review findings (branch `codex/boss-arena`; `npm test` passes)
 - Milestone 6, item 2: Warden health, contact damage, hit feedback, player-tracking full-arena Charge, and reset on death (branch `codex/boss-charge`; PR #3; `npm test` passes)
 - Warden chest-core weak spot: hits at the glowing core deal 1.5x body damage based on shot impact position (branch `codex/boss-core`; PR #8; PR Playtest passes)
 - Milestone 6, item 3: Slag lob with a distinct tell/audio, three airborne landing markers, 3 HP blobs, 2 HP fire patches, adjustable enemy tuning, and the `G.ESHOTS` test fix (branch `codex/slag-lob`; PR #9; Playtest passes)
+- Milestone 6, item 4: Ground Pound with a violet tell, a visible shockwave, adjustable damage and speed, a normal-jump dodge, and wall-to-wall coverage (branch `codex/ground-wave-walls`; PR #14; Playtest passes)
 
-In progress: Milestone 6, item 4, Ground Pound review fix: full-floor wave coverage (x -5..5, z -216..-245) and grounded edge-hit checks (`codex/ground-wave-walls`; PR #11 baseline merged)
+In progress: nothing
 
 Blocked: nothing
 

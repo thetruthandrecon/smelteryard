@@ -41,7 +41,7 @@ module.exports = {
 
       // boss shots bounce with impact while the intro makes it invulnerable, then damage health
       G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse();
-      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -211.2 }); G.step(STEP);
+      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -216.2 }); G.step(STEP);
       const boss = ENTS.find((e) => e.kind === 'boss');
       const shot = (z, level = 0, y = 30, x = 0) => SHOTS.push({ x, y, z, vx: 0, vy: 0, vz: -45, level, life: 1.6, hit: new Set() });
       let eventStart = G.events.length;

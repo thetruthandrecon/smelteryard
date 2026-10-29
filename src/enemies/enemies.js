@@ -91,8 +91,9 @@ function resetBossEncounter(e) {
   GROUND_WAVES.length = 0;
   const door = LEVEL.named.bossDoor;
   if (door) {
-    door.open = 0; door.triggered = false; door.openedAt = 0;
-    door.min[1] = door.closedMin[1]; door.max[1] = door.closedMax[1];
+    door.open = 1; door.triggered = false; door.openedAt = 0;
+    door.enteredArena = false; door.closeStartedAt = 0;
+    door.min[1] = door.closedMin[1] + 5.2; door.max[1] = door.closedMax[1] + 5.2;
   }
 }
 
