@@ -33,6 +33,7 @@ Done:
 - Fix: lock-on no longer bends a shot that is already on course for its target, so a shot aimed at the core now lands on the core (before, it hit about 0.5 m low and counted as a body hit) (branch `claude/core-hit-fx`)
 - Input test fix: the F-key check counts tap shots only, so a slow test machine that sees F held long enough to charge no longer fails it (branch `claude/input-test-flake`)
 - Screen shake when the Warden slams for its Ground pound (H said yes on 2026-10-29); Tuning → Camera → Boss slam shake, default 0.35, 0 turns it off (branch `claude/slam-shake`)
+- Codex's request for PR #15: my boss tests (`10-combat`, `20-player`) now start the fight just inside the arena door, so they pass whether the Warden starts at the corridor trigger or on arena entry (branch `claude/tests-arena-entry`)
 
 In progress: nothing
 

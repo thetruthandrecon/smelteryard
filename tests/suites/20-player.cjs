@@ -34,7 +34,8 @@ module.exports = {
       const { dispatchEvents } = await import('/src/core/world.js');
       const G = window.__game; const { state, STEP, placeAt, ENTS, tuning, camState, p } = G; const { run } = window.__t;
       G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse();
-      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -211.2 }); G.step(STEP); run(3.2);
+      // start just inside the arena door: that both opens the door and starts the fight
+      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -216.2 }); G.step(STEP); run(3.2);
       const boss = ENTS.find((e) => e.kind === 'boss');
       placeAt({ x: 0, y: 28, z: boss.z + 8 }); p.iframes = 99;
       state.noEnemies = false; boss.st = 'idle'; boss.cd = 0; boss.nextAttack = 'groundpound';

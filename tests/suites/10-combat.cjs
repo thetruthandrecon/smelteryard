@@ -73,7 +73,8 @@ module.exports = {
       const { dispatchEvents } = await import('/src/core/world.js');
       const G = window.__game; const { state, STEP, placeAt, ENTS, cam, input, tuning } = G; const { run } = window.__t;
       G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse();
-      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -211.2 }); G.step(STEP); run(3.2);
+      // start just inside the arena door: that both opens the door and starts the fight
+      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -216.2 }); G.step(STEP); run(3.2);
       const boss = ENTS.find((e) => e.kind === 'boss');
       const aimAt = (x, y, z) => { for (let i = 0; i < 6; i++) { const a = G.aimRay(); cam.yaw = Math.atan2(a.ox - x, a.oz - z); cam.pitch = Math.atan2(y - a.oy, Math.hypot(x - a.ox, z - a.oz)); } };
       const trial = (dist, offY, hold) => {
@@ -85,7 +86,7 @@ module.exports = {
         dispatchEvents();
         return { weakspot: hits.length === 1 && hits[0].weakspot, coreFx: hitFeedback.core - before.core, bodyFx: hitFeedback.body - before.body };
       };
-      return { tap: trial(8, 0, 0), tapFar: trial(20, 0, 0), full: trial(8, 0, tuning.chargeTime2 + 0.1), chest: trial(8, -0.8, 0) };
+      return { tap: trial(8, 0, 0), tapFar: trial(14, 0, 0), full: trial(8, 0, tuning.chargeTime2 + 0.1), chest: trial(8, -0.8, 0) };
     });
     log('combat', r);
     expect(r.shots.afterOne === 2, 'one tap should do 1 damage to a 3 HP dummy');
@@ -99,7 +100,7 @@ module.exports = {
     expect(r.lock.homing && !r.lock.noHoming, 'soft lock-on: a locked shot should follow a target that sidesteps 1.2 m (and miss with homing off)');
     expect(r.damage.expect2 - 1 > 8, 'a full charge should beat tapping for the same 1.3 s (about 8 damage)');
     expect(r.pierce.blocked.frontHit && !r.pierce.blocked.backHit, 'a full charge should stop on a target that can\'t be hurt right now (damageable === false)');
-    expect(r.core.tap.weakspot && r.core.tapFar.weakspot && r.core.full.weakspot, 'a shot aimed at the Warden\'s core (tap from 8 m and 20 m, full charge) should hit the core');
+    expect(r.core.tap.weakspot && r.core.tapFar.weakspot && r.core.full.weakspot, 'a shot aimed at the Warden\'s core (tap from 8 m and 14 m, full charge) should hit the core');
     expect(r.core.tap.coreFx === 1 && r.core.tap.bodyFx === 0 && r.core.full.coreFx >= 1, 'a core hit should get the core spark and sound, not the ordinary hit effect');
     expect(!r.core.chest.weakspot && r.core.chest.bodyFx === 1 && r.core.chest.coreFx === 0, 'a shot aimed at the Warden\'s chest below the core should be an ordinary hit');
   },
