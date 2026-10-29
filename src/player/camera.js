@@ -14,7 +14,7 @@ defineTuning('Camera', [
   ['fov', 'Field of view', 70, 55, 95, 1, '°'],
   ['invertY', 'Invert look up and down', false],
   ['slamShake', 'Boss slam shake', 0.35, 0, 1, 0.05, ''],
-  ['roarShake', 'Phase 2 roar shake', 0.3, 0, 1, 0.05, ''],
+  ['roarShake', 'Boss roar shake', 0.3, 0, 1, 0.05, ''],
 ]);
 camera.fov = tuning.fov; camera.updateProjectionMatrix();
 
@@ -27,11 +27,14 @@ export function resetView() { camState.fy = null; cam.yaw = 0; cam.pitch = -0.2;
 on('restart', () => { camState.fy = null; });
 // the Warden's ground pound shakes the whole arena (0 in the tuning panel turns it off)
 on('bossgroundslam', () => { if (tuning.slamShake > 0) shake(tuning.slamShake); });
-// the Warden's Phase 2 roar: a jolt when it starts, then a rumble at half strength while it powers up
+// the Warden's power-up roars: a jolt when one starts, then a rumble at half strength while it powers up;
+// the second roar (into Phase 3) is half as strong again
+const PHASE3_ROAR = 1.5;
 on('bossphase2', () => { if (tuning.roarShake > 0) shake(tuning.roarShake); });
+on('bossphase3', () => { if (tuning.roarShake > 0) shake(Math.min(1, tuning.roarShake * PHASE3_ROAR)); });
 function roarRumble() {
   if (tuning.roarShake <= 0) return;
-  for (const e of ENTS) if (e.kind === 'boss' && e.alive && e.st === 'phaseTransition') shake(tuning.roarShake * 0.5);
+  for (const e of ENTS) if (e.kind === 'boss' && e.alive && e.st === 'phaseTransition') shake(Math.min(1, tuning.roarShake * 0.5 * (e.phaseThree ? PHASE3_ROAR : 1)));
 }
 
 export function updateCamera(dt, ix, iy, iz) {

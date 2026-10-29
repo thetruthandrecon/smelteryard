@@ -47,7 +47,7 @@ module.exports = {
       state.noEnemies = true;
       return out;
     });
-    // the Warden's Phase 2 transition: a jolt at the roar, a rumble while it powers up, then calm
+    // the Warden's power-ups: a jolt at each roar, a rumble while it powers up, then calm; the Phase 3 roar is 1.5x stronger
     r.roar = await page.evaluate(async () => {
       const { dispatchEvents } = await import('/src/core/world.js');
       const { damageEnt } = await import('/src/enemies/enemies.js');
@@ -56,17 +56,21 @@ module.exports = {
       G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse(); G.step(STEP); // one step before the run starts resets the boss door
       state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -216.2 }); G.step(STEP); run(3.2);
       const boss = ENTS.find((e) => e.kind === 'boss');
-      placeAt({ x: 0, y: 28, z: boss.z + 8 }); p.iframes = 99; boss.st = 'idle'; boss.hp = 52;
-      dispatchEvents(); camState.shake = 0;
-      damageEnt(boss, 4, boss.x, boss.y + 0.6, boss.z + boss.hz, 0);
-      const transition = boss.st === 'phaseTransition';
-      dispatchEvents(); const jolt = camState.shake;
-      // let the jolt fade, then check the rumble holds while the Warden powers up
-      for (let i = 0; i < 60; i++) updateCamera(1 / 60, p.x, p.y, p.z);
-      run(1); const rumble = camState.shake;
-      run(tuning.bossPhaseTransitionTime);
-      for (let i = 0; i < 60; i++) updateCamera(1 / 60, p.x, p.y, p.z);
-      return { transition, jolt, rumble, after: camState.shake, setting: tuning.roarShake, calm: boss.st !== 'phaseTransition' };
+      placeAt({ x: 0, y: 28, z: boss.z + 8 }); p.iframes = 99;
+      const roar = (barsLeft) => {
+        boss.st = 'idle'; boss.hp = barsLeft * boss.hpPerBar + 4;
+        dispatchEvents(); camState.shake = 0;
+        damageEnt(boss, 4, boss.x, boss.y + 0.6, boss.z + boss.hz, 0);
+        const transition = boss.st === 'phaseTransition';
+        dispatchEvents(); const jolt = camState.shake;
+        // let the jolt fade, then check the rumble holds while the Warden powers up
+        for (let i = 0; i < 90; i++) updateCamera(1 / 60, p.x, p.y, p.z);
+        run(1); const rumble = camState.shake;
+        run(tuning.bossPhaseTransitionTime);
+        for (let i = 0; i < 90; i++) updateCamera(1 / 60, p.x, p.y, p.z);
+        return { transition, jolt: +jolt.toFixed(4), rumble: +rumble.toFixed(4), after: camState.shake, calm: boss.st !== 'phaseTransition', phase: boss.bossPhase };
+      };
+      return { setting: tuning.roarShake, phase2: roar(2), phase3: roar(1) };
     });
     log('player', r);
     expect(r.ko.died && r.ko.revived && r.ko.hp === 16 && r.ko.backAtStart, 'a knockout should revive you at the checkpoint with full health');
@@ -76,8 +80,9 @@ module.exports = {
     expect(r.lives.lowHpLavaCostsLife, 'lava at 4 HP or less should cost a life');
     expect(r.lives.lastKoGameOver && r.lives.lastFallGameOver, 'losing the last life should be game over');
     expect(r.lives.restartResets, 'restart should reset checkpoint, lives, position and health');
-    expect(r.roar.transition && Math.abs(r.roar.jolt - r.roar.setting) < 1e-9, 'the Warden\'s Phase 2 roar should jolt the camera by the Phase 2 roar shake setting');
-    expect(Math.abs(r.roar.rumble - r.roar.setting * 0.5) < 1e-9 && r.roar.calm && r.roar.after === 0, 'the camera should rumble at half strength while the Warden powers up, and calm down once it is done');
+    const R2 = r.roar.phase2, R3 = r.roar.phase3, set = r.roar.setting;
+    expect(R2.transition && R2.phase === 2 && R2.jolt === set && R2.rumble === +(set * 0.5).toFixed(4) && R2.calm && R2.after === 0, 'the Phase 2 roar should jolt the camera by the Boss roar shake setting, rumble at half strength while the Warden powers up, then calm down');
+    expect(R3.transition && R3.phase === 3 && R3.jolt === +Math.min(1, set * 1.5).toFixed(4) && R3.rumble === +Math.min(1, set * 0.75).toFixed(4) && R3.calm && R3.after === 0, 'the Phase 3 roar should shake 1.5x as hard as the Phase 2 roar, then calm down');
     expect(r.slam.slammed && r.slam.before === 0 && Math.abs(r.slam.after - r.slam.setting) < 1e-9, 'the Warden\'s Ground pound should shake the camera by the Boss slam shake setting');
   },
 };
