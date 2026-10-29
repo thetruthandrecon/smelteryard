@@ -230,6 +230,7 @@ module.exports = {
       const { dispatchEvents } = await import('/src/core/world.js');
       const { run } = window.__t;
       G.loadLevel('smelter'); G.state.mode = 'bot'; G.state.noEnemies = true; G.restartCourse();
+      G.step(G.STEP); // let the fresh-run course step reset the sealed door
       G.state.cp = 3; G.state.started = true;
       G.placeAt({ x: 0, y: 28, z: -216.2 }); G.step(G.STEP); run(3.1);
       const boss = G.ENTS.find((e) => e.kind === 'boss');
