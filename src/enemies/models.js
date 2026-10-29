@@ -228,9 +228,9 @@ export function renderEnemies() {
     } else if (e.kind === 'boss') {
       v.g.rotation.y = e.yaw;
       const phaseTransition = e.st === 'phaseTransition';
-      v.g.rotation.z = phaseTransition ? Math.sin(e.phase * 2) * 0.075 : 0;
+      v.g.rotation.z = phaseTransition ? Math.sin(e.phase) * 0.075 : 0;
       if (phaseTransition) {
-        v.g.position.y += Math.abs(Math.sin(e.phase * 2)) * 0.24;
+        v.g.position.y += Math.abs(Math.sin(e.phase)) * 0.24;
         emit(e.x + (Math.random() - 0.5) * 1.5, e.y + 1.7 + Math.random() * 1.3, e.z + (Math.random() - 0.5) * 1.2,
           (Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.5) * 2, 0.3, C_AMBER, 5);
       }

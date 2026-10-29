@@ -226,7 +226,7 @@ module.exports = {
     expect(bossHealthBar.value === '97' && bossHealthBar.label === '97%', 'the boss health bar should show health lost to body and core hits');
     const phaseTwo = await page.evaluate(async () => {
       const G = window.__game;
-      const { damageEnt, FIRE_PATCHES } = await import('/src/enemies/enemies.js');
+      const { damageEnt, FIRE_PATCHES, GROUND_WAVES } = await import('/src/enemies/enemies.js');
       const { dispatchEvents } = await import('/src/core/world.js');
       const { run } = window.__t;
       G.loadLevel('smelter'); G.state.mode = 'bot'; G.state.noEnemies = true; G.restartCourse();
@@ -301,7 +301,7 @@ module.exports = {
       G.events.length = 0; G.step(G.STEP);
       const slam = G.events.some((e) => e.type === 'bossgroundslam');
       const opened = G.events.some((e) => e.type === 'bosscoreopen');
-      const waveSpeed = G.GROUND_WAVES[0]?.speed ?? 0;
+      const waveSpeed = GROUND_WAVES[0]?.speed ?? 0;
       const openTime = boss.coreOpenTimer;
       const corePoint = [boss.x, boss.y + 2.12, boss.z + 0.72];
       const hpBeforeOpen = boss.hp;
