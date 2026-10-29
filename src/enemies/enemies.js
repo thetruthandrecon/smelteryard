@@ -45,6 +45,8 @@ const BOSS_CORE = { x: 0, y: 2.12, z: -0.72, radius: 0.52 };
 const SHOT_RADII = [0.16, 0.36, 0.62];
 const SLAG_FLIGHT = 0.8, SLAG_GRAVITY = 18, SLAG_RADIUS = 0.32, SLAG_PATCH_LIFE = 3, SLAG_PATCH_RADIUS = 0.9;
 const GROUND_WAVE_DEPTH = 0.42;
+const GROUND_WAVE_MIN_X = -5, GROUND_WAVE_MAX_X = 5;
+const GROUND_WAVE_FRONT_Z = -216, GROUND_WAVE_BACK_Z = -245;
 
 function isBossCoreHit(e, x, y, z, level) {
   const radius = BOSS_CORE.radius + (SHOT_RADII[level] ?? 0);
@@ -143,11 +145,11 @@ function launchBossSlag(e) {
 
 function launchBossGroundWave(e) {
   const dirZ = e.groundWaveDirZ || Math.sign(p.z - e.z) || 1;
-  const endZ = dirZ > 0 ? e.chargeFrontZ : e.chargeBackZ;
+  const endZ = dirZ > 0 ? GROUND_WAVE_FRONT_Z : GROUND_WAVE_BACK_Z;
   const speed = tuning.groundWaveSpeed;
   GROUND_WAVES.push({
-    x: (e.chargeMinX + e.chargeMaxX) * 0.5, y: e.y, z: e.z,
-    width: e.chargeMaxX - e.chargeMinX, dirZ, endZ, speed,
+    x: (GROUND_WAVE_MIN_X + GROUND_WAVE_MAX_X) * 0.5, y: e.y, z: e.z,
+    width: GROUND_WAVE_MAX_X - GROUND_WAVE_MIN_X, dirZ, endZ, speed,
     damage: tuning.groundWaveDamage, depth: GROUND_WAVE_DEPTH,
     life: Math.abs(endZ - e.z) / speed + 0.1, crossed: false,
   });
@@ -351,7 +353,9 @@ export function updateEnemies(dt) {
   }
   for (let i = GROUND_WAVES.length - 1; i >= 0; i--) {
     const wave = GROUND_WAVES[i];
-    const fromZ = wave.z, toZ = fromZ + wave.dirZ * wave.speed * dt;
+    const fromZ = wave.z;
+    const nextZ = fromZ + wave.dirZ * wave.speed * dt;
+    const toZ = wave.dirZ > 0 ? Math.min(nextZ, wave.endZ) : Math.max(nextZ, wave.endZ);
     const halfDepth = wave.depth * 0.5;
     const lowZ = Math.min(fromZ, toZ) - halfDepth, highZ = Math.max(fromZ, toZ) + halfDepth;
     const overlapsX = p.x + R >= wave.x - wave.width * 0.5 && p.x - R <= wave.x + wave.width * 0.5;
@@ -364,7 +368,7 @@ export function updateEnemies(dt) {
       }
     }
     wave.z = toZ; wave.life -= dt;
-    if (wave.life <= 0 || (wave.dirZ > 0 ? wave.z > wave.endZ : wave.z < wave.endZ)) GROUND_WAVES.splice(i, 1);
+    if (wave.life <= 0) GROUND_WAVES.splice(i, 1);
   }
   for (let i = ESHOTS.length - 1; i >= 0; i--) {
     const s = ESHOTS[i];
