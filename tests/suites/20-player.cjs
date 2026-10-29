@@ -29,6 +29,23 @@ module.exports = {
       restartCourse(); out.lives.restartResets = state.cp === 0 && state.lives === tuning.lives && Math.abs(p.z - 8) < 0.01 && p.hp === MAX_HP;
       return out;
     });
+    // a real Ground pound from the Warden shakes the camera by the tuning value
+    r.slam = await page.evaluate(async () => {
+      const { dispatchEvents } = await import('/src/core/world.js');
+      const G = window.__game; const { state, STEP, placeAt, ENTS, tuning, camState, p } = G; const { run } = window.__t;
+      G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse();
+      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -211.2 }); G.step(STEP); run(3.2);
+      const boss = ENTS.find((e) => e.kind === 'boss');
+      placeAt({ x: 0, y: 28, z: boss.z + 8 }); p.iframes = 99;
+      state.noEnemies = false; boss.st = 'idle'; boss.cd = 0; boss.nextAttack = 'groundpound';
+      dispatchEvents(); camState.shake = 0;
+      let slammed = false;
+      for (let i = 0; i < 240 && !slammed; i++) { G.step(STEP); slammed = G.events.some((e) => e.type === 'bossgroundslam'); }
+      const before = camState.shake; dispatchEvents();
+      const out = { slammed, before, after: camState.shake, setting: tuning.slamShake };
+      state.noEnemies = true;
+      return out;
+    });
     log('player', r);
     expect(r.ko.died && r.ko.revived && r.ko.hp === 16 && r.ko.backAtStart, 'a knockout should revive you at the checkpoint with full health');
     expect(r.spikes.hp === 12 && r.spikes.lives === 3 && r.spikes.backAtStart, 'spikes should take 4 HP and send you back to the checkpoint without costing a life');
@@ -37,5 +54,6 @@ module.exports = {
     expect(r.lives.lowHpLavaCostsLife, 'lava at 4 HP or less should cost a life');
     expect(r.lives.lastKoGameOver && r.lives.lastFallGameOver, 'losing the last life should be game over');
     expect(r.lives.restartResets, 'restart should reset checkpoint, lives, position and health');
+    expect(r.slam.slammed && r.slam.before === 0 && Math.abs(r.slam.after - r.slam.setting) < 1e-9, 'the Warden\'s Ground pound should shake the camera by the Boss slam shake setting');
   },
 };
