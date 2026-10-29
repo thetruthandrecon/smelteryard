@@ -41,6 +41,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Ground Pound visibility: a rearing tell, front-facing slam burst, brighter knee-high wave, and impact sound; keeps `bossgroundslam` at floor contact (branch `codex/ground-pound-readable`; PR #18; Playtest passes)
 - Warden lock-on mark: the reticle shows a small ring while `lockView.target` is set (branch `codex/lockon-mark`; PR #17; Playtest passes)
 - Boss door seals the arena on entry and reopens on reset; doorway waiting and immediate turnback are covered by passing Codex suites (branch `codex/boss-door-close`; PR #15)
 - Milestone 6, item 1: boss-door arena, deterministic Forge Warden activation, entrance and filling health bar; added one-click arena practice start and fixed review findings (branch `codex/boss-arena`; `npm test` passes)
