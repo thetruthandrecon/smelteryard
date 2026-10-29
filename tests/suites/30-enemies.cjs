@@ -440,6 +440,7 @@ module.exports = {
       const defeat = (time) => {
         const boss = G.ENTS.find((e) => e.kind === 'boss');
         boss.activated = boss.alive = boss.damageable = boss.combatReady = true;
+        boss.bossPhase = 3; boss.phaseTwo = boss.phaseThree = true; boss.pendingPhase = 0;
         boss.hp = 1; G.state.time = time; G.state.timing = true;
         damageEnt(boss, 1, boss.x, boss.y + 0.5, boss.z + boss.hz, 0);
         dispatchEvents();
