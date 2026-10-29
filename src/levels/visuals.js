@@ -236,7 +236,7 @@ export function renderLevel(dt) {
   });
   beltTex.offset.x -= dt * 3.5 * tuning.beltSpeed / 2;
   for (const d of LV.doorPanels) {
-    d.mesh.position.y = (d.b.min[1] + d.b.max[1]) / 2;
+    d.mesh.position.y = (d.b.closedMin[1] + d.b.closedMax[1]) / 2 + 5.2 * d.b.open;
     d.mesh.visible = d.b.open < 0.97;
   }
   if (LV.goalGem) { LV.goalGem.rotation.y += dt * 1.4; LV.goalGem.position.y = LEVEL.goal.y + 1.6 + Math.sin(now * 2) * 0.15; }
