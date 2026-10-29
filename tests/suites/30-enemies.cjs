@@ -3,9 +3,10 @@ module.exports = {
   name: 'Enemies: turret, walker, flyer',
   owner: 'Codex (enemies)',
   async run({ page, expect, log }) {
-    const r = await page.evaluate(() => {
+    const r = await page.evaluate(async () => {
       const G = window.__game; G.loadLevel('yard');
       const { p, cam, state, placeAt, ENTS, SHOTS, STEP, tuning } = G; const { run, press, fresh } = window.__t;
+      const { GROUND_WAVES } = await import('/src/enemies/enemies.js');
       const out = {};
       // turret hits and knockback
       const tur = ENTS[5]; fresh(tur);
@@ -112,7 +113,7 @@ module.exports = {
       out.groundWaveTuning = { damage: tuning.groundWaveDamage, speed: tuning.groundWaveSpeed };
       const groundMidZ = (boss.chargeFrontZ + boss.chargeBackZ) * 0.5;
       const prepareGroundPound = ({ x = 0, z = groundMidZ - 6 } = {}) => {
-        G.ESHOTS.length = 0; state.noEnemies = false; state.started = true;
+        G.ESHOTS.length = 0; GROUND_WAVES.length = 0; state.noEnemies = false; state.started = true;
         boss.activated = true; boss.alive = true; boss.damageable = true; boss.combatReady = true;
         boss.x = 0; boss.y = 28; boss.z = groundMidZ; boss.st = 'idle'; boss.cd = 0; boss.t2 = 0;
         boss.nextAttack = 'groundpound'; boss.introEntering = false; boss.groundWaveDirZ = 0;
@@ -140,7 +141,7 @@ module.exports = {
       // the full-width wave also reaches players at the side wall and the door wall
       pound = prepareGroundPound({ x: 4.6, z: groundMidZ - 6 });
       run(0.49); run(0.02); boss.combatReady = false;
-      const sideWallWave = G.GROUND_WAVES[0];
+      const sideWallWave = GROUND_WAVES[0];
       const sideWallWaveShape = { x: sideWallWave?.x, width: sideWallWave?.width, endZ: sideWallWave?.endZ };
       run(1.5);
       out.groundWaveSideWall = { groundedAtTell: pound.groundedAtTell, hit: G.events.slice(pound.start).some((e) => e.type === 'groundwavehit'), damage: 16 - p.hp, ...sideWallWaveShape };
@@ -148,7 +149,7 @@ module.exports = {
 
       pound = prepareGroundPound({ x: 0, z: -216.6 });
       run(0.49); run(0.02); boss.combatReady = false;
-      const doorWallWave = G.GROUND_WAVES[0];
+      const doorWallWave = GROUND_WAVES[0];
       const doorWallWaveShape = { x: doorWallWave?.x, width: doorWallWave?.width, endZ: doorWallWave?.endZ };
       run(1.5);
       out.groundWaveDoorWall = { groundedAtTell: pound.groundedAtTell, hit: G.events.slice(pound.start).some((e) => e.type === 'groundwavehit'), damage: 16 - p.hp, ...doorWallWaveShape };
