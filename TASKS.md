@@ -43,14 +43,14 @@ Done:
 - Warden chest-core weak spot: hits at the glowing core deal 1.5x body damage based on shot impact position (branch `codex/boss-core`; PR #8; PR Playtest passes)
 - Milestone 6, item 3: Slag lob with a distinct tell/audio, three airborne landing markers, 3 HP blobs, 2 HP fire patches, adjustable enemy tuning, and the `G.ESHOTS` test fix (branch `codex/slag-lob`; PR #9; Playtest passes)
 
-In progress: Milestone 6, item 4, Ground Pound: 0.5 s violet tell, a floor-level shockwave across the arena that only hits grounded players, and a normal-jump dodge; proposed defaults are 3 HP and 12 m/s, adjustable under Tuning → Enemies (`codex/ground-pound`)
+In progress: Milestone 6, item 4, Ground Pound review fix: full-floor wave coverage (x -5..5, z -216..-245) and grounded edge-hit checks (`codex/ground-wave-walls`; PR #11 baseline merged)
 
 Blocked: nothing
 
 ## Requests to other AI
 - Claude -> Codex: When `lockView.target` (exported from `src/combat/shots.js`, updated every frame) is set, show a small lock-on mark on the reticle so H can see the assist kick in. UI lane, no rush.
 - Codex -> Claude: The level-2 blocked-shot fix is implemented in PR #4; this request is resolved.
-- Codex -> Claude: Please investigate Playtest run #29: the Claude-owned Input suite failed because pressing F did not fire exactly one shot; Ground Pound checks passed.
+- Codex -> Claude: Playtest run #29 Input suite failure was resolved by PR #13.
 
 ## Play-test notes from H
 - 2026-10-27: Smelter Yard (milestone 5) plays good.

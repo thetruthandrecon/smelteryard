@@ -3,9 +3,10 @@ module.exports = {
   name: 'Enemies: turret, walker, flyer',
   owner: 'Codex (enemies)',
   async run({ page, expect, log }) {
-    const r = await page.evaluate(() => {
+    const r = await page.evaluate(async () => {
       const G = window.__game; G.loadLevel('yard');
       const { p, cam, state, placeAt, ENTS, SHOTS, STEP, tuning } = G; const { run, press, fresh } = window.__t;
+      const { GROUND_WAVES } = await import('/src/enemies/enemies.js');
       const out = {};
       // turret hits and knockback
       const tur = ENTS[5]; fresh(tur);
@@ -111,14 +112,14 @@ module.exports = {
 
       out.groundWaveTuning = { damage: tuning.groundWaveDamage, speed: tuning.groundWaveSpeed };
       const groundMidZ = (boss.chargeFrontZ + boss.chargeBackZ) * 0.5;
-      const prepareGroundPound = () => {
-        G.ESHOTS.length = 0; state.noEnemies = false; state.started = true;
+      const prepareGroundPound = ({ x = 0, z = groundMidZ - 6 } = {}) => {
+        G.ESHOTS.length = 0; GROUND_WAVES.length = 0; state.noEnemies = false; state.started = true;
         boss.activated = true; boss.alive = true; boss.damageable = true; boss.combatReady = true;
         boss.x = 0; boss.y = 28; boss.z = groundMidZ; boss.st = 'idle'; boss.cd = 0; boss.t2 = 0;
         boss.nextAttack = 'groundpound'; boss.introEntering = false; boss.groundWaveDirZ = 0;
         p.dead = 0; p.returning = 0; p.iframes = 0; p.hp = 16;
         Object.assign(G.input, { moveX: 0, moveY: 0, jumpHeld: false, jumpQueued: false, dashHeld: false, dashQueued: false });
-        placeAt({ x: 0, y: boss.y, z: groundMidZ - 6 });
+        placeAt({ x, y: boss.y, z });
         const start = G.events.length; G.step(STEP);
         return { start, groundedAtTell: p.grounded };
       };
@@ -136,6 +137,23 @@ module.exports = {
       const groundPass = G.events.slice(pound.start).find((e) => e.type === 'groundwavepass');
       out.groundWaveStanding = { warned: groundWarned, tellHeld: groundTellHeld, launched: groundLaunched, groundedAtTell: pound.groundedAtTell, groundedAtPass: groundPass?.grounded, hit: G.events.slice(pound.start).some((e) => e.type === 'groundwavehit'), damage: 16 - p.hp, nextAttack: nextAttackAfterPound };
       run(0.5);
+
+      // the full-width wave also reaches players at the side wall and the door wall
+      pound = prepareGroundPound({ x: 4.6, z: groundMidZ - 6 });
+      run(0.49); run(0.02); boss.combatReady = false;
+      const sideWallWave = GROUND_WAVES[0];
+      const sideWallWaveShape = { x: sideWallWave?.x, width: sideWallWave?.width, endZ: sideWallWave?.endZ };
+      run(1.5);
+      out.groundWaveSideWall = { groundedAtTell: pound.groundedAtTell, hit: G.events.slice(pound.start).some((e) => e.type === 'groundwavehit'), damage: 16 - p.hp, ...sideWallWaveShape };
+      run(0.2);
+
+      pound = prepareGroundPound({ x: 0, z: -216.6 });
+      run(0.49); run(0.02); boss.combatReady = false;
+      const doorWallWave = GROUND_WAVES[0];
+      const doorWallWaveShape = { x: doorWallWave?.x, width: doorWallWave?.width, endZ: doorWallWave?.endZ };
+      run(1.5);
+      out.groundWaveDoorWall = { groundedAtTell: pound.groundedAtTell, hit: G.events.slice(pound.start).some((e) => e.type === 'groundwavehit'), damage: 16 - p.hp, ...doorWallWaveShape };
+      run(0.2);
 
       // jump with no dash as the wave approaches; it passes while the player is airborne
       pound = prepareGroundPound();
@@ -202,6 +220,8 @@ module.exports = {
     expect(r.bossCharge.nextAttackAfterCharge === 'slag', 'the Warden should alternate to Slag after a Charge');
     expect(r.groundWaveTuning.damage === 3 && r.groundWaveTuning.speed === 12, 'Ground wave damage and speed should default to 3 HP and 12 m/s and be adjustable in Tuning → Enemies');
     expect(r.groundWaveStanding.warned && r.groundWaveStanding.tellHeld && r.groundWaveStanding.launched && r.groundWaveStanding.groundedAtTell && r.groundWaveStanding.groundedAtPass && r.groundWaveStanding.hit && r.groundWaveStanding.damage === 3 && r.groundWaveStanding.nextAttack === 'charge', 'the Warden should telegraph Ground Pound for 0.5 s, hit a grounded player for the tuned damage, and alternate to Charge');
+    expect(r.groundWaveSideWall.groundedAtTell && r.groundWaveSideWall.hit && r.groundWaveSideWall.damage === 3 && r.groundWaveSideWall.x === 0 && r.groundWaveSideWall.width === 10 && r.groundWaveSideWall.endZ === -245, 'the full-width Ground Pound wave should hit a grounded player beside the side wall and travel to the back wall');
+    expect(r.groundWaveDoorWall.groundedAtTell && r.groundWaveDoorWall.hit && r.groundWaveDoorWall.damage === 3 && r.groundWaveDoorWall.x === 0 && r.groundWaveDoorWall.width === 10 && r.groundWaveDoorWall.endZ === -216, 'the Ground Pound wave should hit a grounded player beside the door wall and travel to its endpoint');
     expect(r.groundWaveJump.warned && r.groundWaveJump.jumped && r.groundWaveJump.groundedAtPass === false && !r.groundWaveJump.hit && r.groundWaveJump.damage === 0, 'a normal jump timed to the wave should pass over it without taking damage');
     expect(bossHealthBar.value === '97' && bossHealthBar.label === '97%', 'the boss health bar should show health lost to body and core hits');
   },
