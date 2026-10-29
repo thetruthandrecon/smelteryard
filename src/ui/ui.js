@@ -21,7 +21,7 @@ export function flash(kind = 'fall') { ui.flash.classList.toggle('hurt', kind ==
 function updateSoundLabel() { $('sound-label').textContent = isMuted() ? 'Sound off · M' : 'Sound on · M'; }
 const bestKey = () => `smelter-yard:best:${LEVEL.id}:v3`;
 function updateBestLabel() { ui.best.textContent = state.best != null ? `Best ${fmtTime(state.best)}` : 'No best yet'; }
-function showOverlay(id) { for (const o of ['ov-start', 'ov-pause', 'ov-clear', 'ov-over']) $(o).hidden = o !== id; }
+function showOverlay(id) { for (const o of ['ov-start', 'ov-pause', 'ov-clear', 'ov-over', 'ov-win']) $(o).hidden = o !== id; }
 
 // start or resume play; restart = from the beginning; levelId switches level first
 export function beginPlay(restart, levelId, checkpointIndex = 0) {
@@ -63,8 +63,9 @@ $('btn-resume').addEventListener('click', () => beginPlay(false));
 $('btn-restart').addEventListener('click', () => beginPlay(true));
 $('btn-again').addEventListener('click', () => beginPlay(true));
 $('btn-over-restart').addEventListener('click', () => beginPlay(true));
-for (const id of ['btn-levels', 'btn-clear-levels', 'btn-over-levels']) $(id).addEventListener('click', backToLevels);
-for (const id of ['btn-start-tune', 'btn-pause-tune', 'btn-clear-tune', 'btn-over-tune']) $(id).addEventListener('click', () => toggleTune(true));
+$('btn-win-again').addEventListener('click', () => beginPlay(true, 'smelter', 3));
+for (const id of ['btn-levels', 'btn-clear-levels', 'btn-over-levels', 'btn-win-levels']) $(id).addEventListener('click', backToLevels);
+for (const id of ['btn-start-tune', 'btn-pause-tune', 'btn-clear-tune', 'btn-over-tune', 'btn-win-tune']) $(id).addEventListener('click', () => toggleTune(true));
 $('tune-close').addEventListener('click', () => toggleTune(false));
 
 window.addEventListener('keydown', (e) => {
@@ -74,7 +75,7 @@ window.addEventListener('keydown', (e) => {
   if (inField) return;
   if (e.code === 'KeyM' && !e.repeat) { setMuted(!isMuted()); updateSoundLabel(); return; }
   if (e.code === 'KeyH' && !e.repeat) { const el = $('hud-br'); el.hidden = !el.hidden; return; }
-  if (e.code === 'KeyR' && !e.repeat && (state.mode === 'play' || state.mode === 'clear' || state.mode === 'pause' || state.mode === 'over')) { beginPlay(true); return; }
+  if (e.code === 'KeyR' && !e.repeat && (state.mode === 'play' || state.mode === 'clear' || state.mode === 'pause' || state.mode === 'over' || state.mode === 'win')) { beginPlay(true); return; }
   if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat && state.mode === 'play' && !isPointerLocked()) pause();
 });
 
@@ -91,6 +92,7 @@ on('lava', () => flash());
 on('spikes', () => flash('hurt'));
 on('hit', () => { hitTimer = 0.12; });
 on('clear', onClear);
+on('bossdefeat', onBossDefeat);
 
 function onClear() {
   const t = state.time;
@@ -110,6 +112,16 @@ function onClear() {
   releasePointer();
   setTimeout(() => showOverlay('ov-clear'), 450);
 }
+function onBossDefeat() {
+  const t = state.time;
+  const isBest = state.best == null || t < state.best;
+  if (isBest) { state.best = t; store.set(bestKey(), t); }
+  updateBestLabel();
+  $('win-time').textContent = fmtTime(t);
+  $('win-detail').textContent = `${isBest ? 'New best time' : `Best ${fmtTime(state.best)}`} · ${state.lives} ${state.lives === 1 ? 'life' : 'lives'} left.`;
+  state.mode = 'win'; releaseAll(); releasePointer();
+  setTimeout(() => { if (state.mode === 'win') showOverlay('ov-win'); }, 850);
+}
 function gameOverScreen() {
   releaseAll();
   const where = state.cp === 0 ? 'before the first checkpoint' : `after checkpoint ${state.cp} of ${LEVEL.cpCount}`;
@@ -127,7 +139,9 @@ export function updateHud(dt) {
   ui.lives.textContent = `×${state.lives}`;
   const boss = ENTS.find((e) => e.kind === 'boss');
   ui.boss.hidden = !boss || !boss.activated;
+  ui.boss.classList.toggle('phase2', Boolean(boss?.phaseTwo));
   if (boss && boss.activated) {
+    $('boss-name').textContent = boss.phaseTwo ? 'Forge Warden · Phase 2' : 'Forge Warden';
     const progress = Math.max(0, Math.min(1, boss.combatReady ? boss.hp / boss.maxHp : boss.introProgress));
     ui.bossFill.style.transform = `scaleX(${progress})`;
     ui.bossLabel.textContent = `${Math.round(progress * 100)}%`;

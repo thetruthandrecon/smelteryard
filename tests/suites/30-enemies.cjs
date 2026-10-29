@@ -224,5 +224,90 @@ module.exports = {
     expect(r.groundWaveDoorWall.groundedAtTell && r.groundWaveDoorWall.hit && r.groundWaveDoorWall.damage === 3 && r.groundWaveDoorWall.x === 0 && r.groundWaveDoorWall.width === 10 && r.groundWaveDoorWall.endZ === -216, 'the Ground Pound wave should hit a grounded player beside the door wall and travel to its endpoint');
     expect(r.groundWaveJump.warned && r.groundWaveJump.jumped && r.groundWaveJump.groundedAtPass === false && !r.groundWaveJump.hit && r.groundWaveJump.damage === 0, 'a normal jump timed to the wave should pass over it without taking damage');
     expect(bossHealthBar.value === '97' && bossHealthBar.label === '97%', 'the boss health bar should show health lost to body and core hits');
+    const phaseTwo = await page.evaluate(async () => {
+      const G = window.__game;
+      const { damageEnt, FIRE_PATCHES } = await import('/src/enemies/enemies.js');
+      const { dispatchEvents } = await import('/src/core/world.js');
+      const { run } = window.__t;
+      G.loadLevel('smelter'); G.state.mode = 'bot'; G.state.noEnemies = true; G.restartCourse();
+      G.state.cp = 3; G.state.started = true;
+      G.placeAt({ x: 0, y: 28, z: -216.2 }); G.step(G.STEP); run(3.1);
+      const boss = G.ENTS.find((e) => e.kind === 'boss');
+      const bodyHit = () => [boss.x, boss.y + 0.5, boss.z + boss.hz];
+      boss.hp = 50;
+      const phaseAtHalf = boss.phaseTwo;
+      let eventStart = G.events.length;
+      damageEnt(boss, 1, ...bodyHit(), 0);
+      const phaseEvent = G.events.slice(eventStart).some((e) => e.type === 'bossphase2');
+      const switchedBelowHalf = boss.phaseTwo && boss.hp === 49;
+
+      // Phase 2 Charge crosses the lane faster and leaves touchable fire.
+      boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
+      boss.chargeDirZ = 1; boss.chargeTargetZ = boss.chargeFrontZ; boss.fireTrailDistance = 0;
+      G.placeAt({ x: 4, y: 28, z: -220 }); G.p.iframes = 99;
+      G.state.noEnemies = false;
+      const beforeZ = boss.z; G.step(G.STEP);
+      const chargeStep = +(boss.z - beforeZ).toFixed(3);
+      run(0.25);
+      const trail = FIRE_PATCHES.filter((fire) => fire.source === 'charge');
+      const fire = trail[0], fireLife = fire?.life ?? 0;
+      let fireDamage = 0, fireHit = false;
+      if (fire) {
+        G.placeAt({ x: fire.x, y: 28, z: fire.z });
+        G.p.hp = 16; G.p.iframes = 0;
+        eventStart = G.events.length; G.step(G.STEP);
+        fireDamage = 16 - G.p.hp;
+        fireHit = G.events.slice(eventStart).some((e) => e.type === 'bossfirehit');
+      }
+      G.state.noEnemies = true;
+      run(0.6);
+      const recovery = boss.cd;
+
+      // The core opens on the slam; only core hits gain the 2x window.
+      boss.st = 'groundTell'; boss.t2 = G.STEP; boss.groundWaveDirZ = 1;
+      boss.z = -231; boss.yaw = Math.PI; boss.hp = 49;
+      G.events.length = 0; G.step(G.STEP);
+      const slam = G.events.some((e) => e.type === 'bossgroundslam');
+      const opened = G.events.some((e) => e.type === 'bosscoreopen');
+      const openTime = boss.coreOpenTimer;
+      const corePoint = [boss.x, boss.y + 2.12, boss.z + 0.72];
+      const hpBeforeOpen = boss.hp;
+      damageEnt(boss, 4, ...corePoint, 0);
+      const openDamage = hpBeforeOpen - boss.hp;
+      run(G.tuning.bossCoreOpenDuration + 0.1);
+      const closed = boss.coreOpenTimer === 0;
+      const hpBeforeClosed = boss.hp;
+      damageEnt(boss, 2, ...corePoint, 0);
+      const closedDamage = hpBeforeClosed - boss.hp;
+
+      // A final body hit stops the encounter and dispatches the win screen.
+      boss.hp = 1; G.events.length = 0;
+      const killed = damageEnt(boss, 1, ...bodyHit(), 0);
+      const explosion = G.events.some((e) => e.type === 'bossdefeat');
+      const cleared = G.state.cleared && !G.state.timing;
+      dispatchEvents();
+      return {
+        tuning: { speed: G.tuning.bossPhase2Speed, openTime: G.tuning.bossCoreOpenDuration },
+        phaseAtHalf, phaseEvent, switchedBelowHalf, chargeStep, recovery,
+        fire: { count: trail.length, life: fireLife, damage: fireDamage, hit: fireHit },
+        core: { slam, opened, openTime, openDamage, closed, closedDamage },
+        defeat: { killed, explosion, cleared, mode: G.state.mode },
+      };
+    });
+    log('Warden phase 2 and defeat', phaseTwo);
+    expect(!phaseTwo.phaseAtHalf && phaseTwo.phaseEvent && phaseTwo.switchedBelowHalf, 'Phase 2 should begin below, not at, 50% HP');
+    expect(phaseTwo.tuning.speed === 24 && phaseTwo.tuning.openTime === 2.5 && Math.abs(phaseTwo.chargeStep - phaseTwo.tuning.speed / 120) < 0.01 && phaseTwo.recovery === 0.75, 'Phase 2 Charge should use its 24 m/s tuning default');
+    expect(phaseTwo.fire.count >= 4 && phaseTwo.fire.life > 2 && phaseTwo.fire.damage === 2 && phaseTwo.fire.hit, 'Phase 2 Charge should leave three-second fire that deals the tuned fire damage on touch');
+    expect(phaseTwo.core.slam && phaseTwo.core.opened && phaseTwo.core.openTime === 2.5 && phaseTwo.core.openDamage === 8 && phaseTwo.core.closed && phaseTwo.core.closedDamage === 3, 'Ground Pound should open the core for 2x damage, then return to the normal 1.5x weak spot');
+    expect(phaseTwo.defeat.killed && phaseTwo.defeat.explosion && phaseTwo.defeat.cleared && phaseTwo.defeat.mode === 'win', 'defeating the Warden should emit its explosion and end the fight');
+    await page.waitForFunction(() => !document.getElementById('ov-win').hidden, null, { timeout: 3000 });
+    const win = await page.evaluate(() => ({
+      title: document.getElementById('win-title').textContent,
+      time: document.getElementById('win-time').textContent,
+      visible: !document.getElementById('ov-win').hidden,
+    }));
+    log('Warden win screen', win);
+    expect(win.visible && win.title === 'Forge Warden defeated' && /^\d+:\d\d\.\d\d$/.test(win.time), 'the win screen should show after the defeat explosion');
+
   },
 };
