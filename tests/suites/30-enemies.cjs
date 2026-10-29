@@ -109,6 +109,46 @@ module.exports = {
       out.bossSlagBlobHit = { damage: blobHurt?.amount ?? 0, hp: p.hp, impact: G.events.slice(eventStart).some((e) => e.type === 'slagblobhit'), knockedBack: blobKnockback };
       tuning.damageTaken = savedDamageTaken;
 
+      out.groundWaveTuning = { damage: tuning.groundWaveDamage, speed: tuning.groundWaveSpeed };
+      const groundMidZ = (boss.chargeFrontZ + boss.chargeBackZ) * 0.5;
+      const prepareGroundPound = () => {
+        G.ESHOTS.length = 0; state.noEnemies = false; state.started = true;
+        boss.activated = true; boss.alive = true; boss.damageable = true; boss.combatReady = true;
+        boss.x = 0; boss.y = 28; boss.z = groundMidZ; boss.st = 'idle'; boss.cd = 0; boss.t2 = 0;
+        boss.nextAttack = 'groundpound'; boss.introEntering = false; boss.groundWaveDirZ = 0;
+        p.dead = 0; p.returning = 0; p.iframes = 0; p.hp = 16;
+        Object.assign(G.input, { moveX: 0, moveY: 0, jumpHeld: false, jumpQueued: false, dashHeld: false, dashQueued: false });
+        placeAt({ x: 0, y: boss.y, z: groundMidZ - 6 });
+        const start = G.events.length; G.step(STEP);
+        return { start, groundedAtTell: p.grounded };
+      };
+
+      // a grounded player is hit when the visible floor wave reaches them
+      let pound = prepareGroundPound();
+      const groundWarned = boss.st === 'groundTell' && G.events.slice(pound.start).some((e) => e.type === 'bosstelegraph' && e.attack === 'groundpound');
+      run(0.49);
+      const groundTellHeld = boss.st === 'groundTell';
+      run(0.02);
+      const groundLaunched = G.events.slice(pound.start).some((e) => e.type === 'bossgroundslam');
+      const nextAttackAfterPound = boss.nextAttack;
+      boss.combatReady = false;
+      run(0.7);
+      const groundPass = G.events.slice(pound.start).find((e) => e.type === 'groundwavepass');
+      out.groundWaveStanding = { warned: groundWarned, tellHeld: groundTellHeld, launched: groundLaunched, groundedAtTell: pound.groundedAtTell, groundedAtPass: groundPass?.grounded, hit: G.events.slice(pound.start).some((e) => e.type === 'groundwavehit'), damage: 16 - p.hp, nextAttack: nextAttackAfterPound };
+      run(0.5);
+
+      // jump with no dash as the wave approaches; it passes while the player is airborne
+      pound = prepareGroundPound();
+      const jumpGroundWarned = boss.st === 'groundTell' && G.events.slice(pound.start).some((e) => e.type === 'bosstelegraph' && e.attack === 'groundpound');
+      run(0.49); run(0.02); boss.combatReady = false; run(0.25);
+      const jumpStart = G.events.length;
+      G.input.jumpQueued = true; G.input.jumpHeld = true; G.step(STEP); run(0.4);
+      G.input.jumpHeld = false;
+      const airbornePass = G.events.slice(pound.start).find((e) => e.type === 'groundwavepass');
+      out.groundWaveJump = { warned: jumpGroundWarned, jumped: G.events.slice(jumpStart).some((e) => e.type === 'jump'), groundedAtPass: airbornePass?.grounded, hit: G.events.slice(pound.start).some((e) => e.type === 'groundwavehit'), damage: 16 - p.hp };
+      run(0.9);
+      boss.combatReady = true;
+
       // touching the Warden hurts, and the half-second Charge warning precedes its ram
       boss.activated = true; boss.nextAttack = 'charge';
       boss.st = 'idle'; boss.cd = 100; state.noEnemies = false;
@@ -156,10 +196,13 @@ module.exports = {
     expect(r.bossCharge.warned && r.bossCharge.linedUpDuringTell && r.bossCharge.alignedX === 2.5 && r.bossCharge.started && r.bossCharge.laneLocked && r.bossCharge.frontReached && r.bossCharge.reverseChargeStarted && r.bossCharge.fullCross && r.bossCharge.damage === 4 && r.bossCharge.speed === 18 && r.bossCharge.lane === 25.8 && r.bossCharge.frontZ === -218 && r.bossCharge.backZ === -243.8, 'the Warden should track the player during its tell, lock the lane, and Charge across the full arena for 4 HP at 18 m/s');
     expect(r.bossCoreHit.damage === 1.5 && r.bossCoreHit.weakspot && r.bossBodyHit.damage === 1 && !r.bossBodyHit.weakspot, 'a chest-core hit should deal 1.5x the damage of an otherwise identical body hit');
     expect(r.slagDamageSliders.blob === 3 && r.slagDamageSliders.fire === 2, 'the Slag blob and fire damage sliders should default to 3 HP and 2 HP');
-    expect(r.bossSlagVolley.warned && r.bossSlagVolley.tellHeld && r.bossSlagVolley.count === 3 && JSON.stringify(r.bossSlagVolley.targetXs) === JSON.stringify([-1.5, 0.5, 2.5]) && r.bossSlagVolley.targetZs.every((z) => z === -223) && r.bossSlagVolley.nextAttack === 'charge', 'the Warden should hold the Slag tell, lob three blobs 2 m apart around the player, and alternate back to Charge');
+    expect(r.bossSlagVolley.warned && r.bossSlagVolley.tellHeld && r.bossSlagVolley.count === 3 && JSON.stringify(r.bossSlagVolley.targetXs) === JSON.stringify([-1.5, 0.5, 2.5]) && r.bossSlagVolley.targetZs.every((z) => z === -223) && r.bossSlagVolley.nextAttack === 'groundpound', 'the Warden should hold the Slag tell, lob three blobs 2 m apart around the player, and alternate to Ground Pound');
     expect(!r.bossSlagLandings.early && r.bossSlagLandings.count === 3 && r.bossSlagFireHit.damage === 3 && r.bossSlagFireHit.hp === 13 && r.bossSlagFireHit.effect && r.bossSlagExpired, 'Slag blobs should take about 0.8 s to land, leave three-second fire patches, and deal scaled 2 HP touch damage through hurt()');
     expect(r.bossSlagBlobHit.damage === 4.5 && r.bossSlagBlobHit.hp === 11.5 && r.bossSlagBlobHit.impact && r.bossSlagBlobHit.knockedBack, 'a Slag blob should deal scaled 3 HP damage and apply normal knockback');
     expect(r.bossCharge.nextAttackAfterCharge === 'slag', 'the Warden should alternate to Slag after a Charge');
+    expect(r.groundWaveTuning.damage === 3 && r.groundWaveTuning.speed === 12, 'Ground wave damage and speed should default to 3 HP and 12 m/s and be adjustable in Tuning → Enemies');
+    expect(r.groundWaveStanding.warned && r.groundWaveStanding.tellHeld && r.groundWaveStanding.launched && r.groundWaveStanding.groundedAtTell && r.groundWaveStanding.groundedAtPass && r.groundWaveStanding.hit && r.groundWaveStanding.damage === 3 && r.groundWaveStanding.nextAttack === 'charge', 'the Warden should telegraph Ground Pound for 0.5 s, hit a grounded player for the tuned damage, and alternate to Charge');
+    expect(r.groundWaveJump.warned && r.groundWaveJump.jumped && r.groundWaveJump.groundedAtPass === false && !r.groundWaveJump.hit && r.groundWaveJump.damage === 0, 'a normal jump timed to the wave should pass over it without taking damage');
     expect(bossHealthBar.value === '97' && bossHealthBar.label === '97%', 'the boss health bar should show health lost to body and core hits');
   },
 };

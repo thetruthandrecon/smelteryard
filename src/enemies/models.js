@@ -2,7 +2,7 @@
 import * as THREE from '../core/three.js';
 import { ENTS, on } from '../core/world.js';
 import { canvasTex, makeOrb } from '../core/render.js';
-import { ESHOTS, FIRE_PATCHES } from './enemies.js';
+import { ESHOTS, FIRE_PATCHES, GROUND_WAVES } from './enemies.js';
 import { emit, burst, C_TEAL, C_MOLTEN, C_WHITE, C_RED, C_AMBER } from '../fx/particles.js';
 import { tone, hiss, near } from '../fx/audio.js';
 
@@ -13,6 +13,7 @@ const targetTex = canvasTex(128, (g, s) => {
   g.strokeStyle = '#3a2a1c'; g.lineWidth = 6; g.strokeRect(3, 3, s - 6, s - 6);
 });
 const postMat = new THREE.MeshStandardMaterial({ color: 0x2a3038, roughness: 0.7, metalness: 0.4 });
+const C_SHOCK = new THREE.Color(0x9b7cff);
 function makeEntityMesh(e) {
   const g = new THREE.Group();
   const flashMats = [];
@@ -108,10 +109,12 @@ function makeEntityMesh(e) {
 let entVis = [];
 let slagPatchVis = [];
 let slagTargetVis = [];
+let groundWaveVis = [];
 export function buildEnemyVisuals(group) {
   entVis = ENTS.map((e) => { const v = makeEntityMesh(e); group.add(v.g); return v; });
   slagPatchVis = Array.from({ length: 16 }, () => { const v = makeSlagPatch(); group.add(v.g); return v; });
   slagTargetVis = Array.from({ length: 3 }, () => { const v = makeSlagTarget(); group.add(v.g); return v; });
+  groundWaveVis = Array.from({ length: 4 }, () => { const v = makeGroundWave(); group.add(v.g); return v; });
 }
 
 const eshotOrbs = Array.from({ length: 24 }, () => makeOrb(0xff6a1a));
@@ -142,6 +145,17 @@ function makeSlagTarget() {
   return { g, discMat, ringMat };
 }
 
+function makeGroundWave() {
+  const g = new THREE.Group();
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0x9b7cff, transparent: true, opacity: 0.24, depthWrite: false, toneMapped: false });
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(1, 0.035, 1.0), glowMat);
+  glow.position.y = 0.04; g.add(glow);
+  const waveMat = new THREE.MeshBasicMaterial({ color: 0xd8caff, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
+  const crest = new THREE.Mesh(new THREE.BoxGeometry(1, 0.12, 0.3), waveMat);
+  crest.position.y = 0.085; g.add(crest);
+  return { g, glowMat, waveMat };
+}
+
 export function renderEnemies() {
   const now = performance.now() / 1000;
   eshotOrbs.forEach((o, i) => {
@@ -169,6 +183,14 @@ export function renderEnemies() {
     v.g.visible = true; v.g.position.set(fire.x, fire.y, fire.z); v.g.scale.setScalar(fire.radius);
     v.discMat.opacity = (0.34 + pulse) * fade; v.rimMat.opacity = (0.72 + pulse) * fade;
   });
+  groundWaveVis.forEach((v) => { v.g.visible = false; });
+  GROUND_WAVES.forEach((wave, i) => {
+    const v = groundWaveVis[i];
+    if (!v) return;
+    const pulse = 0.5 + 0.5 * Math.sin(now * 22 + i);
+    v.g.visible = true; v.g.position.set(wave.x, wave.y, wave.z); v.g.scale.set(wave.width, 1, 1);
+    v.glowMat.opacity = 0.16 + pulse * 0.16; v.waveMat.opacity = 0.76 + pulse * 0.22;
+  });
   ENTS.forEach((e, i) => {
     const v = entVis[i];
     if (!v) return;
@@ -190,11 +212,12 @@ export function renderEnemies() {
       v.body.position.y = 0.8 + Math.abs(Math.cos(e.phase)) * 0.05;
     } else if (e.kind === 'boss') {
       v.g.rotation.y = e.yaw;
-      const chargeTell = e.st === 'chargeTell', slagTell = e.st === 'slagTell', telling = chargeTell || slagTell;
-      const tellPulse = chargeTell ? (Math.sin(now * 38) > 0 ? 1 : 0) : slagTell ? 0.5 + 0.5 * Math.sin(now * 10) : 0;
-      v.core.scale.setScalar(chargeTell ? 1.06 + tellPulse * 0.28 : slagTell ? 1.12 + tellPulse * 0.16 : 1 + Math.sin(now * 8) * 0.06);
-      v.coreMat.color.setRGB(slagTell ? 0.08 : 1, slagTell ? 0.72 + tellPulse * 0.2 : telling ? 0.62 + tellPulse * 0.34 : 0.24 + Math.sin(now * 5) * 0.08, slagTell ? 0.78 + tellPulse * 0.22 : telling ? 0.08 + tellPulse * 0.8 : 0.04);
-      v.visorMat.color.setRGB(slagTell ? 0.08 : 1, slagTell ? 0.68 + tellPulse * 0.22 : telling ? 0.45 + tellPulse * 0.5 : 0.25, slagTell ? 0.78 + tellPulse * 0.22 : telling ? 0.2 + tellPulse * 0.7 : 0.08);
+      const chargeTell = e.st === 'chargeTell', slagTell = e.st === 'slagTell', groundTell = e.st === 'groundTell';
+      const telling = chargeTell || slagTell || groundTell;
+      const tellPulse = chargeTell ? (Math.sin(now * 38) > 0 ? 1 : 0) : slagTell ? 0.5 + 0.5 * Math.sin(now * 10) : groundTell ? (Math.sin(now * 24) > 0 ? 1 : 0) : 0;
+      v.core.scale.setScalar(chargeTell ? 1.06 + tellPulse * 0.28 : slagTell ? 1.12 + tellPulse * 0.16 : groundTell ? 1.1 + tellPulse * 0.2 : 1 + Math.sin(now * 8) * 0.06);
+      v.coreMat.color.setRGB(groundTell ? 0.62 + tellPulse * 0.34 : slagTell ? 0.08 : 1, groundTell ? 0.2 + tellPulse * 0.2 : slagTell ? 0.72 + tellPulse * 0.2 : telling ? 0.62 + tellPulse * 0.34 : 0.24 + Math.sin(now * 5) * 0.08, groundTell ? 0.92 + tellPulse * 0.08 : slagTell ? 0.78 + tellPulse * 0.22 : telling ? 0.08 + tellPulse * 0.8 : 0.04);
+      v.visorMat.color.setRGB(groundTell ? 0.58 + tellPulse * 0.38 : slagTell ? 0.08 : 1, groundTell ? 0.18 + tellPulse * 0.2 : slagTell ? 0.68 + tellPulse * 0.22 : telling ? 0.45 + tellPulse * 0.5 : 0.25, groundTell ? 0.9 + tellPulse * 0.1 : slagTell ? 0.78 + tellPulse * 0.22 : telling ? 0.2 + tellPulse * 0.7 : 0.08);
       if (e.st === 'charge') emit(e.x, e.y + 0.3, e.z, 0, 0.15, -e.chargeDirZ * 1.5, 0.24, C_MOLTEN, 0);
     } else if (e.kind === 'flyer') {
       v.g.rotation.y = e.yaw;
@@ -218,6 +241,7 @@ const sfx = {
   swoop: (v) => { hiss(0.4, 600, 2600, 0.16 * v); tone(260, 520, 0.35, 'sawtooth', 0.04 * v); },
   bossTell: (v) => { tone(220, 900, 0.42, 'sawtooth', 0.14 * v); hiss(0.45, 800, 2800, 0.16 * v); },
   slagTell: (v) => { tone(620, 390, 0.38, 'sine', 0.14 * v); tone(940, 690, 0.26, 'triangle', 0.08 * v, 0.1); },
+  groundTell: (v) => { tone(96, 45, 0.22, 'square', 0.18 * v); tone(430, 125, 0.2, 'triangle', 0.11 * v, 0.13); tone(76, 38, 0.18, 'sine', 0.14 * v, 0.3); },
   bossCharge: (v) => { tone(130, 52, 0.24, 'sawtooth', 0.18 * v); hiss(0.65, 1500, 100, 0.24 * v); },
   slagLand: (v) => { tone(170, 70, 0.2, 'square', 0.12 * v); hiss(0.25, 1100, 260, 0.15 * v); },
   bossImpact: (v) => { tone(88, 40, 0.2, 'square', 0.2 * v); hiss(0.18, 1200, 180, 0.16 * v); },
@@ -234,6 +258,10 @@ on('bosstelegraph', ({ e, attack }) => {
     burst(e.x, e.y + 2.1, e.z, 22, 3, C_TEAL, { up: 0.7, grav: 1, life: 0.5 });
     burst(e.x, e.y + 2.1, e.z, 8, 1.5, C_WHITE, { up: 0.4, grav: 0, life: 0.3 });
     sfx.slagTell(near(e.x, e.y, e.z, 35));
+  } else if (attack === 'groundpound') {
+    burst(e.x, e.y + 2.1, e.z, 24, 3, C_SHOCK, { up: 0.7, grav: 1, life: 0.5 });
+    burst(e.x, e.y + 2.1, e.z, 8, 1.5, C_WHITE, { up: 0.4, grav: 0, life: 0.28 });
+    sfx.groundTell(near(e.x, e.y, e.z, 35));
   } else {
     burst(e.x, e.y + 2.1, e.z, 20, 3, C_AMBER, { up: 0.7, grav: 1, life: 0.4 });
     sfx.bossTell(near(e.x, e.y, e.z, 35));
@@ -244,4 +272,6 @@ on('bossslag', (e) => { burst(e.x, e.y, e.z, 18, 4, C_MOLTEN, { up: 1.1, grav: 3
 on('slagland', (e) => { burst(e.x, e.y, e.z, 14, 3, C_MOLTEN, { up: 0.8, grav: 7, life: 0.4 }); sfx.slagLand(near(e.x, e.y, e.z, 35)); });
 on('slagblobhit', (e) => { burst(e.x, e.y, e.z, 18, 4, C_AMBER, { up: 0.9, grav: 7, life: 0.35 }); });
 on('slagfirehit', (e) => { burst(e.x, e.y, e.z, 12, 3, C_RED, { up: 0.8, grav: 7, life: 0.3 }); });
+on('bossgroundslam', (e) => { burst(e.x, e.y + 0.1, e.z, 30, 4, C_SHOCK, { up: 0.35, grav: 2, life: 0.35 }); });
+on('groundwavehit', (e) => { burst(e.x, e.y + 0.08, e.z, 14, 3, C_SHOCK, { up: 0.35, grav: 4, life: 0.28 }); });
 on('bossimpact', (e) => { burst(e.x, e.y, e.z, 24, 5, C_WHITE, { up: 0.9, grav: 8, life: 0.35 }); sfx.bossImpact(near(e.x, e.y, e.z, 35)); });
