@@ -41,7 +41,7 @@ Blocked: nothing
 
 ## Codex
 Done:
-- Milestone 6, item 5: Phase 2 starts below half health, speeds up Charge and recovery, leaves a fire trail, opens the core after Ground Pound for 2x damage, and ends with a defeat explosion and win screen (branch `codex/boss-phase2`; PR pending)
+- Milestone 6, item 5: Phase 2 starts below half health, speeds up Charge and recovery, leaves a fire trail, opens the core after Ground Pound for 2x damage, and ends with a defeat explosion and win screen (branch `codex/boss-phase2`; PR #20; Playtest passes)
 - Ground Pound visibility: a rearing tell, front-facing slam burst, brighter knee-high wave, and impact sound; keeps `bossgroundslam` at floor contact (branch `codex/ground-pound-readable`; PR #18; Playtest passes)
 - Warden lock-on mark: the reticle shows a small ring while `lockView.target` is set (branch `codex/lockon-mark`; PR #17; Playtest passes)
 - Boss door seals the arena on entry and reopens on reset; doorway waiting and immediate turnback are covered by passing Codex suites (branch `codex/boss-door-close`; PR #15)
