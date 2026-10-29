@@ -41,6 +41,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Warden lock-on mark: the reticle shows a small ring while `lockView.target` is set (branch `codex/lockon-mark`; PR #17; Playtest passes)
 - Boss door seals the arena on entry and reopens on reset; doorway waiting and immediate turnback are covered by passing Codex suites (branch `codex/boss-door-close`; PR #15)
 - Milestone 6, item 1: boss-door arena, deterministic Forge Warden activation, entrance and filling health bar; added one-click arena practice start and fixed review findings (branch `codex/boss-arena`; `npm test` passes)
 - Milestone 6, item 2: Warden health, contact damage, hit feedback, player-tracking full-arena Charge, and reset on death (branch `codex/boss-charge`; PR #3; `npm test` passes)
