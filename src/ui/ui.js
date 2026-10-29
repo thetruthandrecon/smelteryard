@@ -3,6 +3,7 @@
 import { MAX_HP, LEVEL, ENTS, CHECKPOINTS, state, on } from '../core/world.js';
 import { $, fmtTime, store } from '../core/util.js';
 import { tuning, onTuningChange } from '../core/tuning.js';
+import { lockView } from '../combat/shots.js';
 import { loadLevel, restartCourse } from '../core/sim.js';
 import { p, placeAt } from '../player/player.js';
 import { releaseAll, lockPointer, releasePointer, isPointerLocked } from '../player/input.js';
@@ -140,6 +141,7 @@ export function updateHud(dt) {
     ui.hp.classList.toggle('low', p.hp <= MAX_HP / 4);
     ui.hp.classList.toggle('critical', p.hp > 0 && p.hp <= 4);
   }
+  ui.reticle.classList.toggle('locked', Boolean(lockView.target));
   if (hitTimer > 0) { hitTimer -= dt; ui.reticle.classList.add('hit'); } else ui.reticle.classList.remove('hit');
   if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) ui.toast.classList.remove('show'); }
   fpsFrames++; fpsTime += dt;
