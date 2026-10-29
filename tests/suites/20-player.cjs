@@ -33,7 +33,7 @@ module.exports = {
     r.slam = await page.evaluate(async () => {
       const { dispatchEvents } = await import('/src/core/world.js');
       const G = window.__game; const { state, STEP, placeAt, ENTS, tuning, camState, p } = G; const { run } = window.__t;
-      G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse();
+      G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse(); G.step(STEP); // one step before the run starts resets the boss door
       // start just inside the arena door: that both opens the door and starts the fight
       state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -216.2 }); G.step(STEP); run(3.2);
       const boss = ENTS.find((e) => e.kind === 'boss');
@@ -47,6 +47,27 @@ module.exports = {
       state.noEnemies = true;
       return out;
     });
+    // the Warden's Phase 2 transition: a jolt at the roar, a rumble while it powers up, then calm
+    r.roar = await page.evaluate(async () => {
+      const { dispatchEvents } = await import('/src/core/world.js');
+      const { damageEnt } = await import('/src/enemies/enemies.js');
+      const { updateCamera } = await import('/src/player/camera.js');
+      const G = window.__game; const { state, STEP, placeAt, ENTS, tuning, camState, p } = G; const { run } = window.__t;
+      G.loadLevel('smelter'); state.mode = 'bot'; state.noEnemies = true; G.restartCourse(); G.step(STEP); // one step before the run starts resets the boss door
+      state.cp = 3; state.started = true; placeAt({ x: 0, y: 28, z: -216.2 }); G.step(STEP); run(3.2);
+      const boss = ENTS.find((e) => e.kind === 'boss');
+      placeAt({ x: 0, y: 28, z: boss.z + 8 }); p.iframes = 99; boss.st = 'idle'; boss.hp = 52;
+      dispatchEvents(); camState.shake = 0;
+      damageEnt(boss, 4, boss.x, boss.y + 0.6, boss.z + boss.hz, 0);
+      const transition = boss.st === 'phaseTransition';
+      dispatchEvents(); const jolt = camState.shake;
+      // let the jolt fade, then check the rumble holds while the Warden powers up
+      for (let i = 0; i < 60; i++) updateCamera(1 / 60, p.x, p.y, p.z);
+      run(1); const rumble = camState.shake;
+      run(tuning.bossPhaseTransitionTime);
+      for (let i = 0; i < 60; i++) updateCamera(1 / 60, p.x, p.y, p.z);
+      return { transition, jolt, rumble, after: camState.shake, setting: tuning.roarShake, calm: boss.st !== 'phaseTransition' };
+    });
     log('player', r);
     expect(r.ko.died && r.ko.revived && r.ko.hp === 16 && r.ko.backAtStart, 'a knockout should revive you at the checkpoint with full health');
     expect(r.spikes.hp === 12 && r.spikes.lives === 3 && r.spikes.backAtStart, 'spikes should take 4 HP and send you back to the checkpoint without costing a life');
@@ -55,6 +76,8 @@ module.exports = {
     expect(r.lives.lowHpLavaCostsLife, 'lava at 4 HP or less should cost a life');
     expect(r.lives.lastKoGameOver && r.lives.lastFallGameOver, 'losing the last life should be game over');
     expect(r.lives.restartResets, 'restart should reset checkpoint, lives, position and health');
+    expect(r.roar.transition && Math.abs(r.roar.jolt - r.roar.setting) < 1e-9, 'the Warden\'s Phase 2 roar should jolt the camera by the Phase 2 roar shake setting');
+    expect(Math.abs(r.roar.rumble - r.roar.setting * 0.5) < 1e-9 && r.roar.calm && r.roar.after === 0, 'the camera should rumble at half strength while the Warden powers up, and calm down once it is done');
     expect(r.slam.slammed && r.slam.before === 0 && Math.abs(r.slam.after - r.slam.setting) < 1e-9, 'the Warden\'s Ground pound should shake the camera by the Boss slam shake setting');
   },
 };
