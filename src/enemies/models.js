@@ -89,7 +89,14 @@ function makeEntityMesh(e) {
     const core = new THREE.Mesh(new THREE.SphereGeometry(0.52, 16, 12), coreMat); core.position.set(0, 2.12, -0.72); g.add(core);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.1, 8, 24), new THREE.MeshStandardMaterial({ color: 0xd7a56c, roughness: 0.34, metalness: 0.8 }));
     rim.position.copy(core.position); g.add(rim);
-    return { g, flashMats, core, coreMat, visorMat };
+    // A front-facing flash makes the floor impact readable from the player's camera.
+    const slamRingMat = new THREE.MeshBasicMaterial({ color: 0xe2d4ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
+    const slamRing = new THREE.Mesh(new THREE.RingGeometry(0.48, 0.62, 40), slamRingMat);
+    slamRing.position.set(0, 1.05, -1.6); slamRing.visible = false; g.add(slamRing);
+    const slamDiscMat = new THREE.MeshBasicMaterial({ color: 0xb99cff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
+    const slamDisc = new THREE.Mesh(new THREE.CircleGeometry(0.45, 40), slamDiscMat);
+    slamDisc.position.set(0, 1.05, -1.62); slamDisc.visible = false; g.add(slamDisc);
+    return { g, flashMats, core, coreMat, visorMat, slamRing, slamRingMat, slamDisc, slamDiscMat, slamAt: -Infinity };
   }
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 }));
   base.position.y = 0.22; g.add(base);
@@ -147,12 +154,14 @@ function makeSlagTarget() {
 
 function makeGroundWave() {
   const g = new THREE.Group();
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0x9b7cff, transparent: true, opacity: 0.24, depthWrite: false, toneMapped: false });
-  const glow = new THREE.Mesh(new THREE.BoxGeometry(1, 0.035, 1.0), glowMat);
-  glow.position.y = 0.04; g.add(glow);
-  const waveMat = new THREE.MeshBasicMaterial({ color: 0xd8caff, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
-  const crest = new THREE.Mesh(new THREE.BoxGeometry(1, 0.12, 0.3), waveMat);
-  crest.position.y = 0.085; g.add(crest);
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xb694ff, transparent: true, opacity: 0.36, depthWrite: false, toneMapped: false });
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1.25), glowMat);
+  glow.position.y = 0.05; g.add(glow);
+  const waveMat = new THREE.MeshBasicMaterial({ color: 0xf0e7ff, transparent: true, opacity: 0.96, depthWrite: false, toneMapped: false });
+  const crest = new THREE.Mesh(new THREE.BoxGeometry(1, 0.72, 0.4), waveMat);
+  crest.position.y = 0.39; g.add(crest);
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(1, 0.12, 0.55), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
+  edge.position.y = 0.76; g.add(edge);
   return { g, glowMat, waveMat };
 }
 
@@ -189,7 +198,7 @@ export function renderEnemies() {
     if (!v) return;
     const pulse = 0.5 + 0.5 * Math.sin(now * 22 + i);
     v.g.visible = true; v.g.position.set(wave.x, wave.y, wave.z); v.g.scale.set(wave.width, 1, 1);
-    v.glowMat.opacity = 0.16 + pulse * 0.16; v.waveMat.opacity = 0.76 + pulse * 0.22;
+    v.glowMat.opacity = 0.28 + pulse * 0.18; v.waveMat.opacity = 0.9 + pulse * 0.1;
   });
   ENTS.forEach((e, i) => {
     const v = entVis[i];
@@ -213,6 +222,17 @@ export function renderEnemies() {
     } else if (e.kind === 'boss') {
       v.g.rotation.y = e.yaw;
       const chargeTell = e.st === 'chargeTell', slagTell = e.st === 'slagTell', groundTell = e.st === 'groundTell';
+      const rear = groundTell ? Math.min(1, (0.5 - e.t2) * 3.2) : 0;
+      v.g.position.y += rear * 0.85;
+      v.g.rotation.x = rear * 0.18;
+      v.g.scale.y = e.st === 'groundRecover' ? 1 - 0.12 * (e.t2 / 0.25) : 1;
+      const slamAge = now - v.slamAt, slamVisible = slamAge >= 0 && slamAge < 0.38;
+      v.slamRing.visible = v.slamDisc.visible = slamVisible;
+      if (slamVisible) {
+        const fade = 1 - slamAge / 0.38, size = 1 + slamAge * 5;
+        v.slamRing.scale.setScalar(size); v.slamDisc.scale.setScalar(size);
+        v.slamRingMat.opacity = 0.95 * fade; v.slamDiscMat.opacity = 0.55 * fade;
+      }
       const telling = chargeTell || slagTell || groundTell;
       const tellPulse = chargeTell ? (Math.sin(now * 38) > 0 ? 1 : 0) : slagTell ? 0.5 + 0.5 * Math.sin(now * 10) : groundTell ? (Math.sin(now * 24) > 0 ? 1 : 0) : 0;
       v.core.scale.setScalar(chargeTell ? 1.06 + tellPulse * 0.28 : slagTell ? 1.12 + tellPulse * 0.16 : groundTell ? 1.1 + tellPulse * 0.2 : 1 + Math.sin(now * 8) * 0.06);
@@ -243,6 +263,7 @@ const sfx = {
   slagTell: (v) => { tone(620, 390, 0.38, 'sine', 0.14 * v); tone(940, 690, 0.26, 'triangle', 0.08 * v, 0.1); },
   groundTell: (v) => { tone(96, 45, 0.22, 'square', 0.18 * v); tone(430, 125, 0.2, 'triangle', 0.11 * v, 0.13); tone(76, 38, 0.18, 'sine', 0.14 * v, 0.3); },
   bossCharge: (v) => { tone(130, 52, 0.24, 'sawtooth', 0.18 * v); hiss(0.65, 1500, 100, 0.24 * v); },
+  groundSlam: (v) => { tone(100, 38, 0.34, 'sine', 0.28 * v); hiss(0.28, 700, 90, 0.16 * v); },
   slagLand: (v) => { tone(170, 70, 0.2, 'square', 0.12 * v); hiss(0.25, 1100, 260, 0.15 * v); },
   bossImpact: (v) => { tone(88, 40, 0.2, 'square', 0.2 * v); hiss(0.18, 1200, 180, 0.16 * v); },
 };
@@ -272,6 +293,13 @@ on('bossslag', (e) => { burst(e.x, e.y, e.z, 18, 4, C_MOLTEN, { up: 1.1, grav: 3
 on('slagland', (e) => { burst(e.x, e.y, e.z, 14, 3, C_MOLTEN, { up: 0.8, grav: 7, life: 0.4 }); sfx.slagLand(near(e.x, e.y, e.z, 35)); });
 on('slagblobhit', (e) => { burst(e.x, e.y, e.z, 18, 4, C_AMBER, { up: 0.9, grav: 7, life: 0.35 }); });
 on('slagfirehit', (e) => { burst(e.x, e.y, e.z, 12, 3, C_RED, { up: 0.8, grav: 7, life: 0.3 }); });
-on('bossgroundslam', (e) => { burst(e.x, e.y + 0.1, e.z, 30, 4, C_SHOCK, { up: 0.35, grav: 2, life: 0.35 }); });
+on('bossgroundslam', (ev) => {
+  const frontZ = ev.z + ev.dirZ * 1.6;
+  burst(ev.x, ev.y + 0.45, frontZ, 64, 8, C_SHOCK, { up: 2.8, grav: 5, life: 0.65, dirZ: ev.dirZ });
+  burst(ev.x, ev.y + 0.7, frontZ, 28, 5, C_WHITE, { up: 2, grav: 4, life: 0.4 });
+  const v = entVis[ENTS.indexOf(ev.e)];
+  if (v) v.slamAt = performance.now() / 1000;
+  sfx.groundSlam(near(ev.x, ev.y, ev.z, 35));
+});
 on('groundwavehit', (e) => { burst(e.x, e.y + 0.08, e.z, 14, 3, C_SHOCK, { up: 0.35, grav: 4, life: 0.28 }); });
 on('bossimpact', (e) => { burst(e.x, e.y, e.z, 24, 5, C_WHITE, { up: 0.9, grav: 8, life: 0.35 }); sfx.bossImpact(near(e.x, e.y, e.z, 35)); });
