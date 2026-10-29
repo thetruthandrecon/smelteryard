@@ -118,6 +118,7 @@ Either AI may add a line here when H states a decision; mention it in the PR.
   - Below half health the Warden pauses for a short power-up (about 2 s) in which it can't be hurt, then fights slightly faster (default 1.33×). Every attack keeps its 0.5 s tell.
   - The camera shakes when the Warden slams and when it roars into Phase 2 (sliders in Tuning → Camera).
   - A practice win doesn't count as a Smelter Yard best time.
+  - The Forge Warden has three sequential health bars (default 60 HP each) and two invulnerable power-ups (default 3 s). Phase 2 is 1.33× faster; Phase 3 is 1.6× faster, deals 1.5× damage, and adds Steam spin with a 0.5 s tell.
 
 ## Milestone 6: the boss (Forge Warden, working name)
 A heavy furnace mech with a glowing core, in an arena behind the boss door at the end of Smelter Yard.
@@ -127,7 +128,8 @@ A heavy furnace mech with a glowing core, in an arena behind the boss door at th
 | Charge | Rams across the whole arena | Dash sideways out of its path at the last moment |
 | Slag lob | Arcs 3 molten blobs that leave fire for 3 s | Read the arc and keep moving |
 | Ground pound | Sends a shockwave along the floor | Jump the wave |
-| Phase 2 (below 50% HP) | Faster, and the charge leaves fire behind | The core opens after each pound for double damage |
+| Phase 2 (after first 60 HP bar) | 1.33× faster, and the charge leaves fire behind | The core opens after each pound for double damage |
+| Phase 3 (after second 60 HP bar) | 1.6× faster, 1.5× attack damage, and Steam spin | Dash out of the steam ring |
 
 The fight also needs:
 - an intro with the health bar filling up

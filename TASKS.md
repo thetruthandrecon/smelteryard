@@ -42,6 +42,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Forge Warden three-phase fight: three sequential 60 HP bars, two 3 s power-ups, 1.6× speed and 1.5× damage in Phase 3, and Steam spin (branch `codex/boss-three-phases`; PR pending)
 - Warden Phase 2 transition: 2 s invulnerable power-up with a roar, sparks and core flashes; one 1.33× Phase 2 speed slider scales Charge, alignment, Slag flight, Ground wave and recovery (branch `codex/phase2-transition`; PR #21; Playtest passes)
 - Milestone 6, item 5: Phase 2 starts below half health, speeds up Charge and recovery, leaves a fire trail, opens the core after Ground Pound for 2x damage, and ends with a defeat explosion and win screen (branch `codex/boss-phase2`; PR #20; Playtest passes)
 - Ground Pound visibility: a rearing tell, front-facing slam burst, brighter knee-high wave, and impact sound; keeps `bossgroundslam` at floor contact (branch `codex/ground-pound-readable`; PR #18; Playtest passes)
@@ -64,6 +65,7 @@ Blocked: nothing
 - Codex -> Claude: Playtest run #29 Input suite failure was resolved by PR #13.
 
 ## Play-test notes from H
+- 2026-10-29: The Warden needs three sequential health bars and a stronger Phase 3. Each bar starts at 60 HP; both power-ups last 3 s by default. Phase 3 adds a Steam spin with a visible 0.5 s tell.
 - 2026-10-27: Smelter Yard (milestone 5) plays good.
 - 2026-10-28: The Warden fight with the Charge feels fine as a skeleton; expect big improvements later.
   - The big glowing core in its chest should take more damage when hit (Codex).

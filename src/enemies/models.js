@@ -14,6 +14,7 @@ const targetTex = canvasTex(128, (g, s) => {
 });
 const postMat = new THREE.MeshStandardMaterial({ color: 0x2a3038, roughness: 0.7, metalness: 0.4 });
 const C_SHOCK = new THREE.Color(0x9b7cff);
+const C_STEAM = new THREE.Color(0xc8f5f1);
 function makeEntityMesh(e) {
   const g = new THREE.Group();
   const flashMats = [];
@@ -102,7 +103,13 @@ function makeEntityMesh(e) {
     const slamDiscMat = new THREE.MeshBasicMaterial({ color: 0xb99cff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
     const slamDisc = new THREE.Mesh(new THREE.CircleGeometry(0.45, 40), slamDiscMat);
     slamDisc.position.set(0, 1.05, -1.62); slamDisc.visible = false; g.add(slamDisc);
-    return { g, flashMats, core, coreMat, visorMat, rim, coreShutters, slamRing, slamRingMat, slamDisc, slamDiscMat, slamAt: -Infinity };
+    const steamRingMat = new THREE.MeshBasicMaterial({ color: 0xc8f5f1, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
+    const steamRing = new THREE.Mesh(new THREE.TorusGeometry(3.45, 0.24, 8, 48), steamRingMat);
+    steamRing.rotation.x = Math.PI / 2; steamRing.position.y = 0.8; steamRing.visible = false; g.add(steamRing);
+    const steamWallMat = new THREE.MeshBasicMaterial({ color: 0xa6dbd9, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
+    const steamWall = new THREE.Mesh(new THREE.CylinderGeometry(3.45, 3.45, 1.65, 48, 1, true), steamWallMat);
+    steamWall.position.y = 0.9; steamWall.visible = false; g.add(steamWall);
+    return { g, flashMats, core, coreMat, visorMat, rim, coreShutters, slamRing, slamRingMat, slamDisc, slamDiscMat, steamRing, steamRingMat, steamWall, steamWallMat, slamAt: -Infinity };
   }
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 }));
   base.position.y = 0.22; g.add(base);
@@ -226,8 +233,19 @@ export function renderEnemies() {
       v.legs[0].rotation.x = sw2; v.legs[1].rotation.x = -sw2;
       v.body.position.y = 0.8 + Math.abs(Math.cos(e.phase)) * 0.05;
     } else if (e.kind === 'boss') {
-      v.g.rotation.y = e.yaw;
       const phaseTransition = e.st === 'phaseTransition';
+      const steamTell = e.st === 'steamTell', steamSpin = e.st === 'steamSpin';
+      v.g.rotation.y = e.yaw + (phaseTransition && e.phaseThree ? e.phaseTransitionElapsed * 9 : 0);
+      v.steamRing.visible = v.steamWall.visible = steamSpin;
+      if (steamSpin) {
+        v.steamRing.scale.setScalar(1 + Math.sin(now * 18) * 0.025);
+        v.steamRingMat.opacity = 0.65 + Math.sin(now * 20) * 0.15;
+        v.steamWallMat.opacity = 0.16 + Math.sin(now * 15) * 0.05;
+      }
+      if (steamTell || steamSpin || (phaseTransition && e.phaseThree)) {
+        for (const side of [-1, 1]) emit(e.x + side * 1.1, e.y + 2.65, e.z,
+          side * (0.8 + Math.random()), 0.8 + Math.random() * 1.2, (Math.random() - 0.5) * 1.4, 0.5, C_STEAM, 0);
+      }
       v.g.rotation.z = phaseTransition ? Math.sin(e.phase) * 0.075 : 0;
       if (phaseTransition) {
         v.g.position.y += Math.abs(Math.sin(e.phase)) * 0.24;
@@ -246,7 +264,7 @@ export function renderEnemies() {
         v.slamRing.scale.setScalar(size); v.slamDisc.scale.setScalar(size);
         v.slamRingMat.opacity = 0.95 * fade; v.slamDiscMat.opacity = 0.55 * fade;
       }
-      const telling = chargeTell || slagTell || groundTell;
+      const telling = chargeTell || slagTell || groundTell || steamTell;
       const tellPulse = chargeTell ? (Math.sin(now * 38) > 0 ? 1 : 0) : slagTell ? 0.5 + 0.5 * Math.sin(now * 10) : groundTell ? (Math.sin(now * 24) > 0 ? 1 : 0) : 0;
       const coreOpen = Math.min(1, e.coreOpenTimer / 0.25);
       v.core.scale.setScalar((chargeTell ? 1.06 + tellPulse * 0.28 : slagTell ? 1.12 + tellPulse * 0.16 : groundTell ? 1.1 + tellPulse * 0.2 : 1 + Math.sin(now * 8) * 0.06) * (1 + coreOpen * 0.32));
@@ -262,6 +280,10 @@ export function renderEnemies() {
         v.core.scale.setScalar(1.18 + flash * 0.45);
         v.coreMat.color.setRGB(1, 0.2 + flash * 0.78, 0.06 + flash * 0.82);
         v.visorMat.color.setRGB(1, 0.15 + flash * 0.65, 0.08 + flash * 0.55);
+      }
+      if (steamTell || steamSpin) {
+        v.coreMat.color.setRGB(0.6, 1, 0.94);
+        v.visorMat.color.setRGB(0.5, 1, 0.92);
       }
       if (e.st === 'charge') emit(e.x, e.y + 0.3, e.z, 0, 0.15, -e.chargeDirZ * 1.5, 0.24, C_MOLTEN, 0);
     } else if (e.kind === 'flyer') {
@@ -292,6 +314,9 @@ const sfx = {
   slagLand: (v) => { tone(170, 70, 0.2, 'square', 0.12 * v); hiss(0.25, 1100, 260, 0.15 * v); },
   bossImpact: (v) => { tone(88, 40, 0.2, 'square', 0.2 * v); hiss(0.18, 1200, 180, 0.16 * v); },
   phaseTwo: (v) => { tone(190, 42, 1.5, 'sawtooth', 0.22 * v); tone(90, 36, 1.65, 'sine', 0.17 * v); hiss(1.2, 900, 100, 0.17 * v); },
+  phaseThree: (v) => { tone(150, 28, 2.2, 'sawtooth', 0.25 * v); tone(75, 30, 2.5, 'square', 0.12 * v); hiss(2.4, 1400, 120, 0.22 * v); },
+  steamTell: (v) => { hiss(0.5, 2400, 350, 0.22 * v); tone(410, 190, 0.45, 'sine', 0.1 * v); },
+  steamSpin: (v) => { hiss(1.5, 1100, 480, 0.23 * v); tone(120, 90, 1.4, 'sawtooth', 0.1 * v); },
   coreOpen: (v) => { tone(520, 960, 0.25, 'triangle', 0.15 * v); },
   bossDefeat: (v) => { tone(160, 32, 0.9, 'sawtooth', 0.26 * v); hiss(0.8, 2800, 80, 0.26 * v); },
 };
@@ -307,6 +332,9 @@ on('bosstelegraph', ({ e, attack }) => {
     burst(e.x, e.y + 2.1, e.z, 22, 3, C_TEAL, { up: 0.7, grav: 1, life: 0.5 });
     burst(e.x, e.y + 2.1, e.z, 8, 1.5, C_WHITE, { up: 0.4, grav: 0, life: 0.3 });
     sfx.slagTell(near(e.x, e.y, e.z, 35));
+  } else if (attack === 'steam') {
+    burst(e.x, e.y + 2.6, e.z, 30, 4, C_STEAM, { up: 1.2, grav: 0, life: 0.55 });
+    sfx.steamTell(near(e.x, e.y, e.z, 35));
   } else if (attack === 'groundpound') {
     burst(e.x, e.y + 2.1, e.z, 24, 3, C_SHOCK, { up: 0.7, grav: 1, life: 0.5 });
     burst(e.x, e.y + 2.1, e.z, 8, 1.5, C_WHITE, { up: 0.4, grav: 0, life: 0.28 });
@@ -323,6 +351,9 @@ on('slagblobhit', (e) => { burst(e.x, e.y, e.z, 18, 4, C_AMBER, { up: 0.9, grav:
 on('slagfirehit', (e) => { burst(e.x, e.y, e.z, 12, 3, C_RED, { up: 0.8, grav: 7, life: 0.3 }); });
 on('bossfirehit', (e) => { burst(e.x, e.y, e.z, 14, 4, C_MOLTEN, { up: 0.8, grav: 7, life: 0.35 }); });
 on('bossphase2', (e) => { burst(e.x, e.y, e.z, 80, 6, C_RED, { up: 1.6, grav: 3, life: 0.8 }); burst(e.x, e.y, e.z, 48, 7, C_AMBER, { up: 1.8, grav: 4, life: 1.1 }); sfx.phaseTwo(near(e.x, e.y, e.z, 35)); });
+on('bossphase3', (e) => { burst(e.x, e.y + 1.6, e.z, 100, 8, C_STEAM, { up: 2.1, grav: 0, life: 1.2 }); burst(e.x, e.y, e.z, 70, 8, C_AMBER, { up: 2, grav: 4, life: 1.1 }); sfx.phaseThree(near(e.x, e.y, e.z, 40)); });
+on('bosssteamspin', (e) => { burst(e.x, e.y + 1, e.z, 55, 5, C_STEAM, { up: 1, grav: 0, life: 0.6 }); sfx.steamSpin(near(e.x, e.y, e.z, 35)); });
+on('bosssteamhit', (e) => { burst(e.x, e.y, e.z, 20, 4, C_STEAM, { up: 0.7, grav: 0, life: 0.35 }); });
 on('bosscoreopen', (e) => { burst(e.x, e.y, e.z, 30, 4, C_WHITE, { up: 0.8, grav: 1, life: 0.45 }); sfx.coreOpen(near(e.x, e.y, e.z, 35)); });
 on('bossdefeat', (e) => {
   burst(e.x, e.y, e.z, 130, 9, C_MOLTEN, { up: 2.4, grav: 5, life: 1.1 });
