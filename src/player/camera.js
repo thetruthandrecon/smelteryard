@@ -13,6 +13,7 @@ defineTuning('Camera', [
   ['camShoulder', 'Shoulder offset', 0.65, -1.5, 1.5, 0.05, 'm'],
   ['fov', 'Field of view', 70, 55, 95, 1, '°'],
   ['invertY', 'Invert look up and down', false],
+  ['slamShake', 'Boss slam shake', 0.35, 0, 1, 0.05, ''],
 ]);
 camera.fov = tuning.fov; camera.updateProjectionMatrix();
 
@@ -23,6 +24,8 @@ export function shake(v, set = false) { camState.shake = set ? v : Math.max(camS
 // snap the camera behind the player, looking down the course
 export function resetView() { camState.fy = null; cam.yaw = 0; cam.pitch = -0.2; }
 on('restart', () => { camState.fy = null; });
+// the Warden's ground pound shakes the whole arena (0 in the tuning panel turns it off)
+on('bossgroundslam', () => { if (tuning.slamShake > 0) shake(tuning.slamShake); });
 
 export function updateCamera(dt, ix, iy, iz) {
   const T = tuning;
