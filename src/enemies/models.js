@@ -89,6 +89,12 @@ function makeEntityMesh(e) {
     const core = new THREE.Mesh(new THREE.SphereGeometry(0.52, 16, 12), coreMat); core.position.set(0, 2.12, -0.72); g.add(core);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.1, 8, 24), new THREE.MeshStandardMaterial({ color: 0xd7a56c, roughness: 0.34, metalness: 0.8 }));
     rim.position.copy(core.position); g.add(rim);
+    const coreShutters = [];
+    for (const side of [-1, 1]) {
+      const shutter = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.72, 0.14), dark);
+      shutter.position.set(side * 0.52, 2.12, -1.3); g.add(shutter);
+      coreShutters.push([shutter, side]);
+    }
     // A front-facing flash makes the floor impact readable from the player's camera.
     const slamRingMat = new THREE.MeshBasicMaterial({ color: 0xe2d4ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
     const slamRing = new THREE.Mesh(new THREE.RingGeometry(0.48, 0.62, 40), slamRingMat);
@@ -96,7 +102,7 @@ function makeEntityMesh(e) {
     const slamDiscMat = new THREE.MeshBasicMaterial({ color: 0xb99cff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
     const slamDisc = new THREE.Mesh(new THREE.CircleGeometry(0.45, 40), slamDiscMat);
     slamDisc.position.set(0, 1.05, -1.62); slamDisc.visible = false; g.add(slamDisc);
-    return { g, flashMats, core, coreMat, visorMat, slamRing, slamRingMat, slamDisc, slamDiscMat, slamAt: -Infinity };
+    return { g, flashMats, core, coreMat, visorMat, rim, coreShutters, slamRing, slamRingMat, slamDisc, slamDiscMat, slamAt: -Infinity };
   }
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 }));
   base.position.y = 0.22; g.add(base);
@@ -119,7 +125,7 @@ let slagTargetVis = [];
 let groundWaveVis = [];
 export function buildEnemyVisuals(group) {
   entVis = ENTS.map((e) => { const v = makeEntityMesh(e); group.add(v.g); return v; });
-  slagPatchVis = Array.from({ length: 16 }, () => { const v = makeSlagPatch(); group.add(v.g); return v; });
+  slagPatchVis = Array.from({ length: 32 }, () => { const v = makeSlagPatch(); group.add(v.g); return v; });
   slagTargetVis = Array.from({ length: 3 }, () => { const v = makeSlagTarget(); group.add(v.g); return v; });
   groundWaveVis = Array.from({ length: 4 }, () => { const v = makeGroundWave(); group.add(v.g); return v; });
 }
@@ -235,9 +241,15 @@ export function renderEnemies() {
       }
       const telling = chargeTell || slagTell || groundTell;
       const tellPulse = chargeTell ? (Math.sin(now * 38) > 0 ? 1 : 0) : slagTell ? 0.5 + 0.5 * Math.sin(now * 10) : groundTell ? (Math.sin(now * 24) > 0 ? 1 : 0) : 0;
-      v.core.scale.setScalar(chargeTell ? 1.06 + tellPulse * 0.28 : slagTell ? 1.12 + tellPulse * 0.16 : groundTell ? 1.1 + tellPulse * 0.2 : 1 + Math.sin(now * 8) * 0.06);
+      const coreOpen = Math.min(1, e.coreOpenTimer / 0.25);
+      v.core.scale.setScalar((chargeTell ? 1.06 + tellPulse * 0.28 : slagTell ? 1.12 + tellPulse * 0.16 : groundTell ? 1.1 + tellPulse * 0.2 : 1 + Math.sin(now * 8) * 0.06) * (1 + coreOpen * 0.32));
+      v.rim.scale.setScalar(1 + coreOpen * 0.38);
+      for (const [shutter, side] of v.coreShutters) shutter.position.x = side * (0.52 + coreOpen * 0.38);
       v.coreMat.color.setRGB(groundTell ? 0.62 + tellPulse * 0.34 : slagTell ? 0.08 : 1, groundTell ? 0.2 + tellPulse * 0.2 : slagTell ? 0.72 + tellPulse * 0.2 : telling ? 0.62 + tellPulse * 0.34 : 0.24 + Math.sin(now * 5) * 0.08, groundTell ? 0.92 + tellPulse * 0.08 : slagTell ? 0.78 + tellPulse * 0.22 : telling ? 0.08 + tellPulse * 0.8 : 0.04);
       v.visorMat.color.setRGB(groundTell ? 0.58 + tellPulse * 0.38 : slagTell ? 0.08 : 1, groundTell ? 0.18 + tellPulse * 0.2 : slagTell ? 0.68 + tellPulse * 0.22 : telling ? 0.45 + tellPulse * 0.5 : 0.25, groundTell ? 0.9 + tellPulse * 0.1 : slagTell ? 0.78 + tellPulse * 0.22 : telling ? 0.2 + tellPulse * 0.7 : 0.08);
+      if (e.phaseTwo && !telling) v.visorMat.color.setRGB(1, 0.16, 0.08);
+      if (coreOpen) v.coreMat.color.setRGB(1, 0.92, 0.52);
+      else if (e.phaseTwo && !telling) v.coreMat.color.setRGB(1, 0.22, 0.07);
       if (e.st === 'charge') emit(e.x, e.y + 0.3, e.z, 0, 0.15, -e.chargeDirZ * 1.5, 0.24, C_MOLTEN, 0);
     } else if (e.kind === 'flyer') {
       v.g.rotation.y = e.yaw;
@@ -266,6 +278,9 @@ const sfx = {
   groundSlam: (v) => { tone(100, 38, 0.34, 'sine', 0.28 * v); hiss(0.28, 700, 90, 0.16 * v); },
   slagLand: (v) => { tone(170, 70, 0.2, 'square', 0.12 * v); hiss(0.25, 1100, 260, 0.15 * v); },
   bossImpact: (v) => { tone(88, 40, 0.2, 'square', 0.2 * v); hiss(0.18, 1200, 180, 0.16 * v); },
+  phaseTwo: (v) => { tone(180, 70, 0.6, 'sawtooth', 0.16 * v); hiss(0.45, 500, 2300, 0.15 * v); },
+  coreOpen: (v) => { tone(520, 960, 0.25, 'triangle', 0.15 * v); },
+  bossDefeat: (v) => { tone(160, 32, 0.9, 'sawtooth', 0.26 * v); hiss(0.8, 2800, 80, 0.26 * v); },
 };
 on('kill', ({ e }) => { burst(e.x, e.y + e.hy * 0.6, e.z, 40, 7, C_MOLTEN, { up: 1.2, grav: 8, life: 0.7 }); burst(e.x, e.y + e.hy * 0.6, e.z, 16, 3, C_WHITE, { up: 0.8, grav: 2, life: 0.4 }); sfx.kill(); });
 on('entspawn', ({ e }) => { burst(e.x, e.y + e.hy * 0.5, e.z, 14, 2, C_TEAL, { up: 0.5, grav: 0, life: 0.4 }); });
@@ -293,6 +308,15 @@ on('bossslag', (e) => { burst(e.x, e.y, e.z, 18, 4, C_MOLTEN, { up: 1.1, grav: 3
 on('slagland', (e) => { burst(e.x, e.y, e.z, 14, 3, C_MOLTEN, { up: 0.8, grav: 7, life: 0.4 }); sfx.slagLand(near(e.x, e.y, e.z, 35)); });
 on('slagblobhit', (e) => { burst(e.x, e.y, e.z, 18, 4, C_AMBER, { up: 0.9, grav: 7, life: 0.35 }); });
 on('slagfirehit', (e) => { burst(e.x, e.y, e.z, 12, 3, C_RED, { up: 0.8, grav: 7, life: 0.3 }); });
+on('bossfirehit', (e) => { burst(e.x, e.y, e.z, 14, 4, C_MOLTEN, { up: 0.8, grav: 7, life: 0.35 }); });
+on('bossphase2', (e) => { burst(e.x, e.y, e.z, 80, 6, C_RED, { up: 1.6, grav: 3, life: 0.8 }); sfx.phaseTwo(near(e.x, e.y, e.z, 35)); });
+on('bosscoreopen', (e) => { burst(e.x, e.y, e.z, 30, 4, C_WHITE, { up: 0.8, grav: 1, life: 0.45 }); sfx.coreOpen(near(e.x, e.y, e.z, 35)); });
+on('bossdefeat', (e) => {
+  burst(e.x, e.y, e.z, 130, 9, C_MOLTEN, { up: 2.4, grav: 5, life: 1.1 });
+  burst(e.x, e.y, e.z, 90, 7, C_WHITE, { up: 1.8, grav: 3, life: 0.8 });
+  burst(e.x, e.y - 1.2, e.z, 70, 6, C_SHOCK, { up: 1.2, grav: 2, life: 0.9 });
+  sfx.bossDefeat(near(e.x, e.y, e.z, 40));
+});
 on('bossgroundslam', (ev) => {
   const frontZ = ev.z + ev.dirZ * 1.6;
   burst(ev.x, ev.y + 0.45, frontZ, 64, 8, C_SHOCK, { up: 2.8, grav: 5, life: 0.65, dirZ: ev.dirZ });

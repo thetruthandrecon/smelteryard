@@ -46,9 +46,9 @@
 
 <div class="overlay" id="ov-start">
   <section class="card" role="dialog" aria-labelledby="start-title">
-    <div class="eyebrow">Prototype · Milestone 5 of 7</div>
+    <div class="eyebrow">Prototype · Milestone 6 of 7</div>
     <h1 id="start-title">Smelter Yard</h1>
-    <p class="lead">The full stage. Fight through the yard, climb the furnace shaft, time the crusher hall and ride the lava conveyor to the boss door. Expect a first run to take a few minutes.</p>
+    <p class="lead">Fight through the yard, climb the furnace shaft, time the crusher hall, ride the lava conveyor and defeat the Forge Warden. Expect a first run to take a few minutes.</p>
     <dl class="keys">
       <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move</dd>
       <dt><kbd>Mouse</kbd></dt><dd>Look and aim (arrow keys work too)</dd>
@@ -91,6 +91,21 @@
       <button class="btn" id="btn-again" type="button">Run again</button>
       <button class="btn ghost" id="btn-clear-levels" type="button">Change level</button>
       <button class="btn ghost" id="btn-clear-tune" type="button">Tuning</button>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="ov-win" hidden>
+  <section class="card" role="dialog" aria-labelledby="win-title">
+    <div class="eyebrow">Smelter Yard complete</div>
+    <h2 id="win-title">Forge Warden defeated</h2>
+    <div class="big-time" id="win-time">0:00.00</div>
+    <p class="lead" id="win-detail">The arena is yours.</p>
+    <p class="note">Tell H what felt fair or frustrating in the fight. If you changed sliders, copy your settings from Tuning.</p>
+    <div class="actions">
+      <button class="btn" id="btn-win-again" type="button">Fight again</button>
+      <button class="btn ghost" id="btn-win-levels" type="button">Change level</button>
+      <button class="btn ghost" id="btn-win-tune" type="button">Tuning</button>
     </div>
   </section>
 </div>

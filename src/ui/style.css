@@ -46,6 +46,9 @@ body {
 .boss-track { width: 100%; height: 13px; padding: 2px; border: 1px solid rgba(255, 197, 137, 0.82); background: rgba(10, 14, 19, 0.8); box-shadow: 0 0 12px rgba(255, 106, 26, 0.25); }
 .boss-track i { display: block; width: 100%; height: 100%; transform: scaleX(0); transform-origin: left center; background: linear-gradient(90deg, #ff6a1a, #ffc15c); box-shadow: 0 0 8px rgba(255, 138, 42, 0.65); transition: transform 0.08s linear; }
 .boss-health-label { color: var(--text); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; }
+#boss-hud.phase2 .boss-name { color: #ff6b58; }
+#boss-hud.phase2 .boss-track { border-color: #ff6b58; box-shadow: 0 0 16px rgba(255, 74, 61, 0.45); }
+#boss-hud.phase2 .boss-track i { background: linear-gradient(90deg, #ff3828, #ffae5a); }
 .hp-label { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--muted); }
 .lives { font-size: 17px; font-weight: 700; letter-spacing: 0.04em; color: var(--text); font-variant-numeric: tabular-nums; }
 @keyframes blink { 50% { opacity: 0.25; } }
@@ -74,6 +77,8 @@ body {
 .card { width: 100%; max-width: 620px; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--molten); padding: 28px; display: grid; gap: 16px; }
 .card h1 { margin: 0; font-family: var(--font-display); font-size: clamp(34px, 7vw, 52px); font-weight: 700; line-height: 1; letter-spacing: 0.02em; text-transform: uppercase; text-wrap: balance; }
 .card h2 { margin: 0; font-family: var(--font-display); font-size: 30px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+#ov-win .card { border-top-color: var(--hero); box-shadow: 0 0 80px rgba(58, 214, 198, 0.12); }
+#win-title { color: var(--hero); }
 .lead { margin: 0; font-size: 18px; color: var(--text); max-width: 62ch; }
 .note { margin: 0; font-size: 15px; color: var(--muted); max-width: 64ch; }
 .keys { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; align-items: center; }
