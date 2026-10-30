@@ -201,7 +201,7 @@ module.exports = {
       const track = document.querySelector('.boss-track');
       return !document.getElementById('boss-hud').hidden && track && track.getAttribute('aria-valuenow') === '94';
     }, null, { timeout: 3000 });
-    const bossHealthBar = await page.evaluate(() => ({ values: [...document.querySelectorAll('.boss-track')].map((el) => el.getAttribute('aria-valuenow')), labels: [...document.querySelectorAll('.boss-phase-label')].map((el) => el.textContent), total: document.getElementById('boss-health-label').textContent }));
+    const bossHealthBar = await page.evaluate(() => ({ count: document.querySelectorAll('.boss-track').length, value: document.querySelector('.boss-track').getAttribute('aria-valuenow'), label: document.getElementById('boss-health-label').textContent }));
     log('boss health bar after hit', bossHealthBar);
     expect(r.turret.hits >= 1 && r.turret.firstKnock > 0, 'the turret should hit and knock back a player standing in front of it');
     expect(r.walker.repeatable && !r.walker.stuck && r.walker.flips >= 2, 'the walker should patrol the same way every time and turn at both ends');
@@ -223,7 +223,7 @@ module.exports = {
     expect(r.groundWaveSideWall.groundedAtTell && r.groundWaveSideWall.hit && r.groundWaveSideWall.damage === 3 && r.groundWaveSideWall.x === 0 && r.groundWaveSideWall.width === 10 && r.groundWaveSideWall.endZ === -245, 'the full-width Ground Pound wave should hit a grounded player beside the side wall and travel to the back wall');
     expect(r.groundWaveDoorWall.groundedAtTell && r.groundWaveDoorWall.hit && r.groundWaveDoorWall.damage === 3 && r.groundWaveDoorWall.x === 0 && r.groundWaveDoorWall.width === 10 && r.groundWaveDoorWall.endZ === -216, 'the Ground Pound wave should hit a grounded player beside the door wall and travel to its endpoint');
     expect(r.groundWaveJump.warned && r.groundWaveJump.jumped && r.groundWaveJump.groundedAtPass === false && !r.groundWaveJump.hit && r.groundWaveJump.damage === 0, 'a normal jump timed to the wave should pass over it without taking damage');
-    expect(JSON.stringify(bossHealthBar.values) === JSON.stringify(['94', '100', '100']) && JSON.stringify(bossHealthBar.labels) === JSON.stringify(['Phase 1', 'Phase 2', 'Phase 3']) && bossHealthBar.total === '177 / 180 HP', 'three labelled bars should drain Phase 1 first and show total HP');
+    expect(bossHealthBar.count === 1 && bossHealthBar.value === '94' && bossHealthBar.label === 'Phase 1 · 57 / 60 HP', 'the single boss bar should show Phase 1 and its remaining HP');
     const phases = await page.evaluate(async () => {
       const G = window.__game;
       const { damageEnt, FIRE_PATCHES, GROUND_WAVES } = await import('/src/enemies/enemies.js');
@@ -236,30 +236,33 @@ module.exports = {
       G.placeAt({ x: 0, y: 28, z: -216.2 }); G.step(G.STEP); run(3.1);
       const boss = G.ENTS.find((e) => e.kind === 'boss');
       const bodyHit = () => [boss.x, boss.y + 0.5, boss.z + boss.hz];
-      const bars = () => {
+      const bar = () => {
         updateHud(G.STEP);
-        return {
-          values: [...document.querySelectorAll('.boss-track')].map((el) => Number(el.getAttribute('aria-valuenow'))),
-          active: [...document.querySelectorAll('.boss-row')].findIndex((el) => el.classList.contains('active')) + 1,
-        };
+        const track = document.querySelector('.boss-track');
+        return { count: document.querySelectorAll('.boss-track').length,
+          value: Number(track.getAttribute('aria-valuenow')),
+          label: document.getElementById('boss-health-label').textContent,
+          aria: track.getAttribute('aria-label') };
       };
-      const initial = { hp: boss.hp, max: boss.maxHp, perBar: boss.hpPerBar, bars: bars() };
+      const initial = { hp: boss.hp, max: boss.maxHp, perBar: boss.hpPerBar, bar: bar() };
       boss.hp = 121; boss.st = 'chargeTell'; boss.t2 = 0.4;
       let eventStart = G.events.length;
       damageEnt(boss, 12, ...bodyHit(), 0);
       const first = {
         hp: boss.hp, phase: boss.bossPhase, cancelledTell: boss.st === 'phaseTransition' && boss.t2 === 0,
-        event: G.events.slice(eventStart).some((e) => e.type === 'bossphase2'), bars: bars(),
+        event: G.events.slice(eventStart).some((e) => e.type === 'bossphase2'), bar: bar(),
       };
       eventStart = G.events.length;
       damageEnt(boss, 4, ...bodyHit(), 0);
       first.blocked = boss.hp === 120 && G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked);
       G.placeAt({ x: 4, y: 28, z: -220 }); G.p.iframes = 99; G.state.noEnemies = false;
       eventStart = G.events.length; run(2.75);
+      first.refill = bar().value;
       first.held = boss.st === 'phaseTransition' && !boss.damageable &&
         !G.events.slice(eventStart).some((e) => ['bosscharge', 'bossslag', 'bossgroundslam', 'bosssteamspin'].includes(e.type));
       G.state.noEnemies = true; run(0.35);
       first.resumed = boss.st === 'idle' && boss.damageable;
+      first.full = bar().value;
 
       // Phase 2 keeps the existing faster Charge, fire trail, and open-core window.
       boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
@@ -306,17 +309,19 @@ module.exports = {
         pending, pendingBlocked, phase: boss.bossPhase,
         event: G.events.slice(eventStart).some((e) => e.type === 'bossphase3'),
         afterCharge: boss.st === 'phaseTransition' && !boss.damageable,
-        bars: bars(),
+        bar: bar(),
       };
       eventStart = G.events.length;
       G.state.noEnemies = false;
       run(Math.max(0, boss.phaseTransitionTimer - 0.15));
+      second.refill = bar().value;
       second.held = boss.st === 'phaseTransition' && !boss.damageable &&
         !G.events.slice(eventStart).some((e) => ['bosscharge', 'bossslag', 'bossgroundslam', 'bosssteamspin'].includes(e.type));
       damageEnt(boss, 4, ...bodyHit(), 0);
       second.blocked = boss.hp === 60 && G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked);
       G.state.noEnemies = true; run(0.25);
       second.resumed = boss.st === 'idle' && boss.damageable;
+      second.full = bar().value;
 
       // Phase 3 speeds every attack and increases damage, including the fire.
       boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
@@ -379,12 +384,13 @@ module.exports = {
     });
     log('Warden three phases and defeat', phases);
     expect(phases.initial.hp === 180 && phases.initial.max === 180 && phases.initial.perBar === 60 &&
-      JSON.stringify(phases.initial.bars.values) === JSON.stringify([100, 100, 100]) && phases.initial.bars.active === 1,
+      phases.initial.bar.count === 1 && phases.initial.bar.value === 100 && phases.initial.bar.label === 'Phase 1 · 60 / 60 HP',
       'the Warden should start with three full 60 HP bars');
     expect(phases.first.hp === 120 && phases.first.phase === 2 && phases.first.event && phases.first.cancelledTell &&
-      phases.first.blocked && phases.first.held && phases.first.resumed && phases.first.bars.active === 2 &&
-      JSON.stringify(phases.first.bars.values) === JSON.stringify([0, 100, 100]),
-      'emptying Phase 1 should cancel its tell, block shots and attacks for 3 s, then resume in Phase 2');
+      phases.first.blocked && phases.first.held && phases.first.resumed && phases.first.bar.count === 1 &&
+      phases.first.bar.value === 0 && phases.first.bar.label.startsWith('Phase 2 ·') &&
+      phases.first.refill > 80 && phases.first.refill < 100 && phases.first.full === 100,
+      'emptying Phase 1 should refill the single Phase 2 bar during the blocked power-up');
     expect(phases.tuning.transition === 3 && phases.tuning.speed2 === 1.33 &&
       Math.abs(phases.phase2Step - phases.tuning.charge * phases.tuning.speed2 / 120) < 0.01 &&
       Math.abs(phases.phase2Recovery - 1 / phases.tuning.speed2) < 0.02 &&
@@ -393,10 +399,11 @@ module.exports = {
       'Phase 2 should keep its faster Charge, fire trail and double-damage open core');
     expect(phases.second.pending && phases.second.pendingBlocked && phases.second.phase === 3 &&
       phases.second.event && phases.second.afterCharge && phases.second.held && phases.second.blocked &&
-      phases.second.resumed && phases.second.bars.active === 3 &&
-      JSON.stringify(phases.second.bars.values) === JSON.stringify([0, 0, 100]) &&
+      phases.second.resumed && phases.second.bar.count === 1 && phases.second.bar.value === 0 &&
+      phases.second.bar.label.startsWith('Phase 3 ·') && phases.second.refill > 80 &&
+      phases.second.refill < 100 && phases.second.full === 100 &&
       Math.abs(phases.pendingStep - phases.tuning.charge * phases.tuning.speed2 / 120) < 0.01,
-      'emptying Phase 2 during a Charge should finish that Charge, then block shots and attacks through the Phase 3 power-up');
+      'emptying Phase 2 during a Charge should finish it, then refill the single Phase 3 bar through the blocked power-up');
     expect(phases.tuning.speed3 === 1.6 && phases.tuning.damage3 === 1.5 &&
       Math.abs(phases.phase3Step - phases.tuning.charge * phases.tuning.speed3 / 120) < 0.01 &&
       Math.abs(phases.phase3Recovery - 1 / phases.tuning.speed3) < 0.02 &&
