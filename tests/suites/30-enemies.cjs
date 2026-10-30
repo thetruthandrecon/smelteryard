@@ -409,8 +409,8 @@ module.exports = {
     expect(phases.steam.warned && phases.steam.tellHeld && phases.steam.started &&
       phases.steam.inside.damage === 4.5 && phases.steam.inside.event &&
       phases.steam.outside.damage === 0 && !phases.steam.outside.event &&
-      Math.abs(phases.steam.outside.slide - 4 / 120) < 0.01,
-      'Steam spin should hold its 0.5 s tell, slide at 4 m/s, hurt inside the ring and spare a player outside it');
+      Math.abs(phases.steam.outside.slide) < 0.001,
+      'Steam spin should hold its 0.5 s tell, stay in place, hurt inside the steam ring and spare a player outside it');
     expect(phases.defeat.killed && phases.defeat.explosion && phases.defeat.cleared && phases.defeat.mode === 'win',
       'defeating the Warden in Phase 3 should still explode and show the win screen');
     await page.waitForFunction(() => !document.getElementById('ov-win').hidden, null, { timeout: 3000 });
@@ -457,6 +457,86 @@ module.exports = {
     expect(bestTime.legacyIgnored, 'the old v3 best-time value should be ignored');
     expect(bestTime.practice.best === 100 && bestTime.practice.saved === 100 && bestTime.practice.detail.includes('Practice win') && !bestTime.practice.detail.includes('New best') && !bestTime.practice.detail.includes('Best '), 'a quick practice win should neither compare nor replace the full-stage best time');
     expect(bestTime.full.best === 90 && bestTime.full.saved === 90 && bestTime.full.detail.includes('New best time'), 'a full-stage win should still record a new best time');
+
+    const energyRings = await page.evaluate(async () => {
+      const G = window.__game;
+      const { ENERGY_RINGS } = await import('/src/enemies/enemies.js');
+      const { run } = window.__t;
+      const setup = (spinTime = G.STEP) => {
+        G.loadLevel('smelter'); G.state.mode = 'bot'; G.state.noEnemies = true; G.restartCourse(); G.step(G.STEP);
+        G.state.cp = 3; G.state.started = true;
+        G.placeAt({ x: 4.6, y: 28, z: -231 }); G.step(G.STEP);
+        const boss = G.ENTS.find((e) => e.kind === 'boss');
+        boss.activated = boss.alive = boss.combatReady = boss.damageable = true;
+        boss.bossPhase = 3; boss.phaseTwo = boss.phaseThree = true;
+        boss.x = 0; boss.y = 28; boss.z = -231; boss.st = 'steamSpin'; boss.t2 = spinTime;
+        G.p.hp = 16; G.p.iframes = 0; G.p.stun = 0;
+        G.cam.yaw = 0;
+        Object.assign(G.input, { moveX: 0, moveY: 0, jumpHeld: false, jumpQueued: false, dashHeld: false, dashQueued: false });
+        G.events.length = 0; G.state.noEnemies = false;
+        return boss;
+      };
+
+      const boss = setup();
+      const startX = boss.x, startZ = boss.z;
+      G.step(G.STEP);
+      const firstLaunch = G.events.filter((e) => e.type === 'bossenergyring').length;
+      const ring = ENERGY_RINGS[0];
+      const shape = { height: ring?.height, speed: ring?.speed, damage: ring?.damage, reach: ring?.maxRadius };
+      run(0.52);
+      const groundedPass = G.events.find((e) => e.type === 'energyringpass' && e.index === 1);
+      const groundedHit = G.events.find((e) => e.type === 'energyringhit' && e.index === 1);
+      const groundedDamage = 16 - G.p.hp;
+      run(0.09);
+      const secondLaunch = G.events.filter((e) => e.type === 'bossenergyring').length;
+      run(2);
+      const passes = G.events.filter((e) => e.type === 'energyringpass').map((e) => e.index);
+      const grounded = { stationary: boss.x === startX && boss.z === startZ, firstLaunch, secondLaunch, shape,
+        hit: Boolean(groundedHit), damage: groundedDamage, feet: groundedPass?.feetAboveFloor, passes };
+
+      setup();
+      G.input.jumpQueued = true; G.input.jumpHeld = true;
+      G.step(G.STEP); run(0.52);
+      const plainPass = G.events.find((e) => e.type === 'energyringpass' && e.index === 1);
+      const plainJump = { jumped: G.events.some((e) => e.type === 'jump'), feet: plainPass?.feetAboveFloor,
+        hit: G.events.some((e) => e.type === 'energyringhit' && e.index === 1), damage: 16 - G.p.hp };
+
+      setup(0.55);
+      G.input.moveX = 1; G.input.jumpQueued = true; G.input.jumpHeld = true;
+      G.step(G.STEP); run(0.2);
+      G.input.jumpQueued = true; G.step(G.STEP);
+      let secondWallJumpQueued = false;
+      run(2.5, (time) => {
+        if (!secondWallJumpQueued && time > 0.55 && G.p.onWall && !G.p.grounded) {
+          G.input.jumpQueued = true; G.input.jumpHeld = true; secondWallJumpQueued = true;
+        }
+      });
+      G.input.moveX = 0; G.input.jumpHeld = false;
+      const wallPasses = G.events.filter((e) => e.type === 'energyringpass');
+      const wallJump = {
+        jumps: G.events.filter((e) => e.type === 'walljump').length,
+        secondQueued: secondWallJumpQueued, passes: wallPasses.map((e) => ({ index: e.index, feet: e.feetAboveFloor })),
+        hits: G.events.filter((e) => e.type === 'energyringhit').length,
+        damage: 16 - G.p.hp,
+      };
+      return { tuning: { height: G.tuning.energyRingHeight, speed: G.tuning.energyRingSpeed, damage: G.tuning.energyRingDamage },
+        grounded, plainJump, wallJump };
+    });
+    log('Phase 3 energy rings', energyRings);
+    expect(energyRings.tuning.height === 2.8 && energyRings.tuning.speed === 10 && energyRings.tuning.damage === 3 &&
+      energyRings.grounded.stationary && energyRings.grounded.firstLaunch === 1 && energyRings.grounded.secondLaunch === 2 &&
+      energyRings.grounded.shape.height === 2.8 && energyRings.grounded.shape.speed === 10 &&
+      energyRings.grounded.shape.damage === 4.5 && energyRings.grounded.shape.reach > 15 &&
+      energyRings.grounded.hit && energyRings.grounded.damage === 4.5 &&
+      JSON.stringify(energyRings.grounded.passes) === JSON.stringify([1, 2]),
+      'stationary Steam spin should launch two arena-wide 2.8 m energy rings 0.6 s apart and hit a grounded player once per ring');
+    expect(energyRings.plainJump.jumped && energyRings.plainJump.feet > 1.8 && energyRings.plainJump.feet < 2.8 &&
+      energyRings.plainJump.hit && energyRings.plainJump.damage === 4.5,
+      'a normal jump at its peak should remain below the ring and take damage');
+    expect(energyRings.wallJump.jumps >= 2 && energyRings.wallJump.secondQueued &&
+      energyRings.wallJump.passes.length === 2 && energyRings.wallJump.passes.every((e) => e.feet >= 2.8) &&
+      energyRings.wallJump.hits === 0 && energyRings.wallJump.damage === 0,
+      'real repeated wall-jump input at a side wall should lift the player over both energy rings');
 
 
   },
