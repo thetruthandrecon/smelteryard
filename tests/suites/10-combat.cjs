@@ -88,6 +88,34 @@ module.exports = {
       };
       return { tap: trial(8, 0, 0), tapFar: trial(14, 0, 0), full: trial(8, 0, tuning.chargeTime2 + 0.1), chest: trial(8, -0.8, 0) };
     });
+    // hit-stop: how long game time holds after each kind of hit (taps never hold)
+    r.hitStop = await page.evaluate(async () => {
+      const S = await import('/src/combat/shots.js');
+      const { dispatchEvents, events } = await import('/src/core/world.js');
+      const G = window.__game; G.loadLevel('yard');
+      const { cam, input, placeAt, ENTS, tuning } = G; const { run, fresh } = window.__t;
+      const drain = () => S.simTime(10);
+      // game time held back over the next second of frames
+      const held = () => { let frozen = 0; for (let t = 0; t < 1; t += 1 / 120) frozen += 1 / 120 - S.simTime(1 / 120); return +frozen.toFixed(4); };
+      const big = ENTS[0];
+      const shoot = (hold) => {
+        fresh(big); big.hp = 100; placeAt({ x: -4, y: 0, z: 6 + tuning.camShoulder }); cam.yaw = Math.PI / 2; cam.pitch = 0; run(0.2);
+        dispatchEvents(); drain();
+        input.fireQueued = true; input.fireHeld = true; run(hold); input.fireHeld = false; run(0.5);
+        dispatchEvents(); return held();
+      };
+      const synthetic = (e) => { dispatchEvents(); drain(); events.push(e); dispatchEvents(); return held(); };
+      const out = {
+        setting: tuning.hitStop,
+        tap: shoot(0), level1: shoot((tuning.chargeTime1 + tuning.chargeTime2) / 2), full: shoot(tuning.chargeTime2 + 0.1),
+        fullCore: synthetic({ type: 'hit', x: 0, y: 0, z: 0, level: 2, weakspot: true }),
+        blocked: synthetic({ type: 'hit', x: 0, y: 0, z: 0, level: 2, blocked: true }),
+        defeat: synthetic({ type: 'bossdefeat', x: 0, y: 0, z: 0 }),
+        afterwards: S.simTime(1 / 60) === 1 / 60,
+      };
+      tuning.hitStop = 0; out.off = shoot(tuning.chargeTime2 + 0.1); tuning.hitStop = out.setting;
+      return out;
+    });
     log('combat', r);
     expect(r.shots.afterOne === 2, 'one tap should do 1 damage to a 3 HP dummy');
     expect(r.shots.killedAfterThree, 'three taps should destroy a dummy');
@@ -102,6 +130,11 @@ module.exports = {
     expect(r.pierce.blocked.frontHit && !r.pierce.blocked.backHit, 'a full charge should stop on a target that can\'t be hurt right now (damageable === false)');
     expect(r.core.tap.weakspot && r.core.tapFar.weakspot && r.core.full.weakspot, 'a shot aimed at the Warden\'s core (tap from 8 m and 14 m, full charge) should hit the core');
     expect(r.core.tap.coreFx === 1 && r.core.tap.bodyFx === 0 && r.core.full.coreFx >= 1, 'a core hit should get the core spark and sound, not the ordinary hit effect');
+    const hs = r.hitStop, near = (a, b) => Math.abs(a - b) < 0.002;
+    expect(hs.tap === 0 && hs.blocked === 0, 'hit-stop: taps and blocked hits should not hold the game');
+    expect(near(hs.full, hs.setting) && near(hs.level1, hs.setting * 0.5), 'hit-stop: a full charge hit should hold for the Hit-stop setting, a level 1 charge for half of it');
+    expect(near(hs.fullCore, hs.setting * 1.5) && near(hs.defeat, hs.setting * 4), 'hit-stop: a charged core hit should hold 1.5x as long, the final blow on the Warden 4x');
+    expect(hs.afterwards && hs.off === 0, 'hit-stop: game time should run normally once the hold is over, and setting it to 0 should turn it off');
     expect(!r.core.chest.weakspot && r.core.chest.bodyFx === 1 && r.core.chest.coreFx === 0, 'a shot aimed at the Warden\'s chest below the core should be an ordinary hit');
   },
 };

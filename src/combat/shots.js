@@ -22,6 +22,10 @@ defineTuning('Combat', [
   ['lockOn', 'Soft lock-on', true],
   ['lockOnAngle', 'Lock-on cone', 7, 0, 20, 0.5, '°'],
   ['lockOnTurn', 'Lock-on homing', 90, 0, 360, 5, '°/s'],
+  // hit-stop: the game holds still for a moment when a big hit lands (sparks and screen shake keep moving).
+  // This is the hold for a full charge; a level 1 charge holds half as long, a charged hit on the Warden's
+  // core 1.5x as long, the blow that defeats the Warden 4x. Taps never hold. 0 turns it off.
+  ['hitStop', 'Hit-stop', 0.07, 0, 0.2, 0.01, 's'],
 ]);
 
 export const SHOTS = [];
@@ -218,6 +222,22 @@ const sfx = {
     if (lvl > 0) { tone(170, 60, 0.2, 'sine', lvl === 2 ? 0.18 : 0.12); hiss(0.16, 5200, 1400, lvl === 2 ? 0.12 : 0.07); }
   },
 };
+// hit-stop: game time stands still while hitStopLeft runs down (real time, so it never touches the
+// deterministic simulation; the game loop asks simTime() how much game time passes each frame)
+let hitStopLeft = 0;
+export function hitStop(sec) { if (sec > 0) hitStopLeft = Math.max(hitStopLeft, sec); }
+export function simTime(dt) {
+  if (hitStopLeft <= 0) return dt;
+  const held = Math.min(dt, hitStopLeft);
+  hitStopLeft -= held;
+  return dt - held;
+}
+export const hitStopRemaining = () => hitStopLeft;
+function hitStopFor(e) {
+  if (e.blocked || !e.level) return 0;
+  return tuning.hitStop * (e.level === 2 ? 1 : 0.5) * (e.weakspot ? 1.5 : 1);
+}
+on('bossdefeat', () => hitStop(tuning.hitStop * 4));
 // how many hits of each kind got their effect (the combat tests read this)
 export const hitFeedback = { body: 0, core: 0, blocked: 0 };
 on('shoot', (e) => {
@@ -227,6 +247,7 @@ on('shoot', (e) => {
 });
 on('charge', (e) => { sfx.charge(e.level); burst(p.x, p.y + 1.2, p.z, e.level === 2 ? 24 : 14, 3, e.level === 2 ? C_AMBER : C_TEAL, { up: 0.6, grav: 0, life: 0.35 }); });
 on('hit', (e) => {
+  hitStop(hitStopFor(e));
   // blocked (the target can't be hurt right now): a metallic ping and sparks glancing back toward the player
   if (e.blocked) {
     const dx = p.x - e.x, dz = p.z - e.z, m = Math.hypot(dx, dz) || 1;
