@@ -116,7 +116,7 @@ Either AI may add a line here when H states a decision; mention it in the PR.
   - Soft lock-on for the boss: yes.
 - 2026-10-29:
   - Below half health the Warden pauses for a short power-up (about 2 s) in which it can't be hurt, then fights slightly faster (default 1.33×). Every attack keeps its 0.5 s tell.
-  - The camera shakes when the Warden slams and when it roars into Phase 2 (sliders in Tuning → Camera).
+  - The camera shakes when the Warden slams and at each power-up roar, the Phase 3 roar harder (sliders in Tuning → Camera).
   - A practice win doesn't count as a Smelter Yard best time.
   - The Forge Warden has three sequential health bars (default 60 HP each) and two invulnerable power-ups (default 3 s). Phase 2 is 1.33× faster; Phase 3 is 1.6× faster, deals 1.5× damage, and adds Steam spin with a 0.5 s tell.
 

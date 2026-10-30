@@ -35,6 +35,7 @@ Done:
 - Screen shake when the Warden slams for its Ground pound (H said yes on 2026-10-29); Tuning → Camera → Boss slam shake, default 0.35, 0 turns it off (branch `claude/slam-shake`)
 - Codex's request for PR #15: my boss tests (`10-combat`, `20-player`) now start the fight just inside the arena door, so they pass whether the Warden starts at the corridor trigger or on arena entry (branch `claude/tests-arena-entry`)
 - Phase 2 roar shake: a jolt when the Warden roars, then a half-strength rumble while it powers up; Tuning → Camera → Phase 2 roar shake, default 0.3, 0 turns it off. My boss test setups now reset the boss door first, so they don't depend on test order (branch `claude/roar-shake`, built on #21)
+- Phase 3 roar: the second power-up jolts and rumbles 1.5× as hard; the slider is now Tuning → Camera → Boss roar shake (branch `claude/phase3-roar`, built on #23)
 
 In progress: nothing
 
