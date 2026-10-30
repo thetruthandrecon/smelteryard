@@ -43,6 +43,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Milestone 7 Warden model: layered furnace armor, boiler and vents, articulated limbs, and idle/attack poses without moving its hitbox or core (branch `codex/warden-model`).
 - Phase 3 Steam spin stops dealing steam damage 0.5 s before its energy rings launch; the safe interval has a visible and audible charge-up (branch `codex/steam-before-rings`).
 - Phase 3 energy rings: Steam spin stays in place, then launches two tall arena-wide rings 0.6 s apart; wall-jumps clear them (branch `codex/phase3-energy-rings`; PR #25; Playtest passes)
 - Forge Warden three-phase fight: three sequential 60 HP bars, two 3 s power-ups, 1.6× speed and 1.5× damage in Phase 3, and Steam spin (branch `codex/boss-three-phases`; PR #23; Playtest passes)
