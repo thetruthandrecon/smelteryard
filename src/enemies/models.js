@@ -2,6 +2,7 @@
 import * as THREE from '../core/three.js';
 import { ENTS, on } from '../core/world.js';
 import { canvasTex, makeOrb } from '../core/render.js';
+import { loadModel, modelsEnabled } from '../core/models.js';
 import { ESHOTS, FIRE_PATCHES, GROUND_WAVES, ENERGY_RINGS, STEAM_CHARGE_TIME } from './enemies.js';
 import { emit, burst, C_TEAL, C_MOLTEN, C_WHITE, C_RED, C_AMBER } from '../fx/particles.js';
 import { tone, hiss, near } from '../fx/audio.js';
@@ -195,7 +196,40 @@ let slagTargetVis = [];
 let groundWaveVis = [];
 let energyRingVis = [];
 export function buildEnemyVisuals(group) {
-  entVis = ENTS.map((e) => { const v = makeEntityMesh(e); group.add(v.g); return v; });
+  entVis = ENTS.map((e) => {
+    const v = makeEntityMesh(e); group.add(v.g);
+    if (e.kind === 'flyer' && modelsEnabled()) {
+      loadModel('flyer').then(({ scene, animations }) => {
+        if (!entVis.includes(v)) return;
+        const bounds = new THREE.Box3().setFromObject(scene);
+        const size = bounds.getSize(new THREE.Vector3());
+        if (size.x <= 0 || size.y <= 0 || size.z <= 0) return;
+        scene.scale.multiplyScalar(Math.min(e.hx * 2 / size.x, e.hy / size.y, e.hz * 2 / size.z));
+        const center = new THREE.Box3().setFromObject(scene).getCenter(new THREE.Vector3());
+        scene.position.set(-center.x, e.hy / 2 - center.y, -center.z);
+        v.modelBasePosition = scene.position.clone();
+        v.modelFlashMats = [];
+        scene.traverse((part) => {
+          if (!part.isMesh) return;
+          const cloneMaterial = (mat) => {
+            const copy = mat.clone();
+            if (copy.isMeshStandardMaterial) v.modelFlashMats.push({ mat: copy, emissive: copy.emissive.clone(), intensity: copy.emissiveIntensity });
+            return copy;
+          };
+          part.material = Array.isArray(part.material) ? part.material.map(cloneMaterial) : cloneMaterial(part.material);
+        });
+        if (animations.length) {
+          v.modelMixer = new THREE.AnimationMixer(scene);
+          v.modelMixer.clipAction(animations.find((clip) => /idle|hover/i.test(clip.name)) || animations[0]).play();
+          v.modelLastTime = performance.now() / 1000;
+        }
+        v.g.add(scene);
+        v.model = scene;
+        v.body.visible = false;
+      }).catch(() => {}); // The code-built flyer remains visible if the file cannot load.
+    }
+    return v;
+  });
   slagPatchVis = Array.from({ length: 32 }, () => { const v = makeSlagPatch(); group.add(v.g); return v; });
   slagTargetVis = Array.from({ length: 3 }, () => { const v = makeSlagTarget(); group.add(v.g); return v; });
   groundWaveVis = Array.from({ length: 4 }, () => { const v = makeGroundWave(); group.add(v.g); return v; });
@@ -308,6 +342,9 @@ export function renderEnemies() {
     v.g.position.set(e.x, e.y + (e.kind === 'mover' ? Math.sin(now * 3 + i) * 0.08 : e.kind === 'boss' && e.st === 'enter' ? Math.abs(Math.sin(e.phase)) * 0.06 : 0), e.z);
     const f = e.flash > 0 ? 1 : 0;
     for (const m of v.flashMats) { m.emissive.setRGB(f, f, f); m.emissiveIntensity = f * 1.5; }
+    if (v.modelFlashMats) for (const { mat, emissive, intensity } of v.modelFlashMats) {
+      mat.emissive.copy(emissive).addScalar(f); mat.emissiveIntensity = intensity + f * 1.5;
+    }
     if (e.kind === 'turret') {
       v.yawG.rotation.y = e.yaw;
       v.pitchG.rotation.x = e.pitch;
@@ -420,6 +457,16 @@ export function renderEnemies() {
       v.body.rotation.x = e.st === 'swoop' ? -0.6 : 0;
       v.eyeMat.color.setRGB(1, e.st === 'tele' ? 0.9 : 0.35, e.st === 'tele' ? 0.6 : 0.15);
       v.eye.scale.setScalar(e.st === 'tele' ? 1.6 + 0.3 * Math.sin(now * 40) : 1);
+      if (v.model) {
+        v.model.position.copy(v.modelBasePosition);
+        v.model.position.x += shake;
+        v.model.position.y += Math.sin(now * 5 + i) * 0.025;
+        v.model.rotation.x = e.st === 'swoop' ? -0.6 : 0;
+        if (v.modelMixer) {
+          v.modelMixer.update(Math.min(0.1, Math.max(0, now - v.modelLastTime)));
+          v.modelLastTime = now;
+        }
+      }
       if (e.st === 'swoop') emit(e.x, e.y + 0.4, e.z, 0, 0, 0, 0.25, C_MOLTEN, 0);
     } else if (v.block) {
       v.block.rotation.y = e.kind === 'mover' ? now * 1.2 : 0;
