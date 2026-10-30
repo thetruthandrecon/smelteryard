@@ -1,6 +1,11 @@
-// Player health rules: knockout and revive, spikes, lava, lives and game over.
+// Player health rules (knockout and revive, spikes, lava, lives and game over), camera shakes, the hero model,
+// and the 3D model files in assets/models (they load, stay within budget, and stay off in the tests).
+const fs = require('fs');
+const path = require('path');
+const MODELS = path.resolve(__dirname, '..', '..', 'assets', 'models');
+
 module.exports = {
-  name: 'Player: health, hazards and lives',
+  name: 'Player: health, lives, camera, hero and model files',
   owner: 'Claude (player)',
   async run({ page, expect, log }) {
     const r = await page.evaluate(() => {
@@ -111,5 +116,45 @@ module.exports = {
     expect(R2.transition && R2.phase === 2 && R2.jolt === set && R2.rumble === +(set * 0.5).toFixed(4) && R2.calm && R2.after === 0, 'the Phase 2 roar should jolt the camera by the Boss roar shake setting, rumble at half strength while the Warden powers up, then calm down');
     expect(R3.transition && R3.phase === 3 && R3.jolt === +Math.min(1, set * 1.5).toFixed(4) && R3.rumble === +Math.min(1, set * 0.75).toFixed(4) && R3.calm && R3.after === 0, 'the Phase 3 roar should shake 1.5x as hard as the Phase 2 roar, then calm down');
     expect(r.slam.slammed && r.slam.before === 0 && Math.abs(r.slam.after - r.slam.setting) < 1e-9, 'the Warden\'s Ground pound should shake the camera by the Boss slam shake setting');
+
+    // every model file loads through src/core/models.js and stays within the AGENTS.md budget
+    const names = fs.existsSync(MODELS) ? fs.readdirSync(MODELS).filter((f) => f.endsWith('.glb')).map((f) => f.slice(0, -4)) : [];
+    const mb = Object.fromEntries(names.map((n) => [n, +(fs.statSync(path.join(MODELS, n + '.glb')).size / 1e6).toFixed(2)]));
+    const files = await page.evaluate(async (list) => {
+      const M = await import('/src/core/models.js'), THREE = await import('/src/core/three.js');
+      const out = { enabled: M.modelsEnabled(), models: {} };
+      for (const name of list) {
+        try {
+          const a = await M.loadModel(name), b = await M.loadModel(name);
+          const meshes = (root) => { const r = []; root.traverse((o) => { if (o.isMesh) r.push(o); }); return r; };
+          let tris = 0, tex = 0, lit = true;
+          for (const o of meshes(a.scene)) {
+            tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+            for (const m of [].concat(o.material)) {
+              for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) if (m[k] && m[k].image) tex = Math.max(tex, m[k].image.width, m[k].image.height);
+              if (m.isMeshStandardMaterial && !m.envMap) lit = false;
+            }
+          }
+          const ma = meshes(a.scene), mb2 = meshes(b.scene);
+          // the loader must build models with the game's own Three.js (the import map in index.html), or they won't render right
+          const sameThree = a.scene instanceof THREE.Object3D && ma.every((o) => o.geometry instanceof THREE.BufferGeometry);
+          out.models[name] = { tris, tex, lit, sameThree, meshes: ma.length, ownCopy: ma.length > 0 && ma.every((o, i) => o !== mb2[i]) };
+        } catch (e) { out.models[name] = { error: String(e.message || e) }; }
+      }
+      return out;
+    }, names);
+    log('model files', { ...files, mb });
+    expect(!files.enabled, 'the tests should run with the code-built looks (modelsEnabled() false when a bot drives the browser)');
+    for (const n of names) {
+      const m = files.models[n];
+      expect(!m.error, `assets/models/${n}.glb should load (${m.error})`);
+      if (m.error) continue;
+      expect(m.tris > 0 && m.tris <= 30000, `assets/models/${n}.glb should have at most 30,000 triangles (has ${m.tris})`);
+      expect(mb[n] <= 5, `assets/models/${n}.glb should be at most 5 MB (is ${mb[n]} MB)`);
+      expect(m.tex <= 2048, `assets/models/${n}.glb textures should be at most 2048 px (largest ${m.tex})`);
+      expect(m.lit, `assets/models/${n}.glb materials should get the shared reflection map`);
+      expect(m.sameThree, `assets/models/${n}.glb should be built with the game's own Three.js (import map in index.html)`);
+      expect(m.ownCopy, `each loadModel('${n}') call should get its own copy`);
+    }
   },
 };
