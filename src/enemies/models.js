@@ -73,19 +73,79 @@ function makeEntityMesh(e) {
     const armor = std({ color: 0x343b42, roughness: 0.42, metalness: 0.72 });
     const dark = std({ color: 0x1b2025, roughness: 0.62, metalness: 0.65 });
     const bronze = std({ color: 0x8a4a22, roughness: 0.46, metalness: 0.55 });
-    const footMat = dark;
-    for (const x of [-0.62, 0.62]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.82, 0.7), dark); leg.position.set(x, 0.72, 0); leg.castShadow = true; g.add(leg);
-      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.28, 1.02), footMat); foot.position.set(x, 0.16, -0.16); foot.castShadow = true; g.add(foot);
+    const edge = std({ color: 0xb67b43, roughness: 0.36, metalness: 0.8 });
+    const soot = std({ color: 0x292d31, roughness: 0.8, metalness: 0.3 });
+    const furnaceGlow = new THREE.MeshBasicMaterial({ color: 0xff5b18, toneMapped: false });
+    const ventGlow = new THREE.MeshBasicMaterial({ color: 0xff8130, toneMapped: false });
+    const box = (parent, mat, w, h, d, x, y, z) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      mesh.position.set(x, y, z); mesh.castShadow = true; parent.add(mesh);
+      return mesh;
+    };
+    const legs = [];
+    for (const side of [-1, 1]) {
+      const hip = new THREE.Group(); hip.position.set(side * 0.62, 1.04, 0); g.add(hip);
+      const knee = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.48, 10), bronze);
+      knee.rotation.z = Math.PI / 2; knee.position.y = -0.23; hip.add(knee);
+      box(hip, armor, 0.62, 0.58, 0.72, 0, -0.48, 0.02);
+      box(hip, edge, 0.46, 0.1, 0.76, 0, -0.27, -0.03);
+      box(hip, dark, 0.18, 0.48, 0.18, side * 0.3, -0.48, 0.16);
+      const ankle = box(g, dark, 0.46, 0.3, 0.56, side * 0.62, 0.31, 0.04);
+      box(g, bronze, 0.88, 0.27, 1.02, side * 0.62, 0.15, -0.14);
+      box(g, edge, 0.72, 0.08, 0.2, side * 0.62, 0.27, -0.61);
+      legs.push({ hip, ankle });
     }
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.95, 2.05, 1.32), armor); torso.position.y = 2.05; torso.castShadow = true; g.add(torso);
-    for (const x of [-1.14, 1.14]) {
-      const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.88, 1.18), bronze); shoulder.position.set(x, 2.75, 0); shoulder.castShadow = true; g.add(shoulder);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.48, 1.16, 0.58), dark); arm.position.set(x, 1.7, -0.02); arm.castShadow = true; g.add(arm);
+    box(g, dark, 1.78, 0.48, 1.08, 0, 1.06, 0.02);
+    box(g, armor, 1.98, 1.9, 1.3, 0, 2.08, 0.02);
+    box(g, bronze, 1.96, 0.16, 1.34, 0, 3.04, 0.02);
+    box(g, dark, 1.48, 0.18, 1.32, 0, 1.16, 0.01);
+    for (const side of [-1, 1]) {
+      box(g, bronze, 0.28, 1.38, 1.2, side * 1.02, 2.1, 0.02);
+      const chest = box(g, armor, 0.38, 1.18, 0.2, side * 0.82, 2.15, -0.7);
+      chest.rotation.z = -side * 0.1;
+      box(g, edge, 0.34, 0.1, 0.22, side * 0.82, 2.76, -0.73);
+      for (const y of [1.8, 2.08, 2.36]) box(g, ventGlow, 0.035, 0.09, 0.34, side * 1.18, y, 0.1);
+      for (const y of [1.72, 2.48]) {
+        const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.06, 8), edge);
+        bolt.rotation.x = Math.PI / 2; bolt.position.set(side * 0.83, y, -0.83); g.add(bolt);
+      }
     }
-    const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.72, 0.9), bronze); head.position.set(0, 3.48, -0.02); head.castShadow = true; g.add(head);
+    // The glowing furnace grille sits below the unobstructed core.
+    box(g, dark, 1.05, 0.38, 0.12, 0, 1.42, -0.68);
+    for (const x of [-0.3, 0, 0.3]) box(g, furnaceGlow, 0.16, 0.27, 0.025, x, 1.42, -0.76);
+    for (const y of [1.31, 1.53]) box(g, bronze, 1.08, 0.07, 0.12, 0, y, -0.78);
+    // Boiler shell and twin exhaust stacks stay within the Warden's existing bounds.
+    const boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.66, 0.94, 12), soot);
+    boiler.position.set(0, 2.3, 0.46); boiler.castShadow = true; g.add(boiler);
+    for (const side of [-1, 1]) {
+      const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.68, 10), dark);
+      stack.position.set(side * 0.72, 3.44, 0.42); stack.castShadow = true; g.add(stack);
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.1, 10), bronze);
+      collar.position.set(side * 0.72, 3.79, 0.42); g.add(collar);
+      const ember = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.015, 10), furnaceGlow);
+      ember.position.set(side * 0.72, 3.845, 0.42); g.add(ember);
+    }
+    const armJoints = [];
+    for (const side of [-1, 1]) {
+      const shoulder = new THREE.Group(); shoulder.position.set(side * 1.1, 2.72, 0); g.add(shoulder);
+      box(shoulder, bronze, 0.68, 0.74, 1.04, 0, 0, 0);
+      box(shoulder, edge, 0.72, 0.11, 1.05, 0, 0.38, 0);
+      const arm = new THREE.Group(); arm.position.set(0, -0.38, -0.02); shoulder.add(arm);
+      box(arm, dark, 0.48, 0.95, 0.58, 0, -0.43, 0);
+      box(arm, armor, 0.54, 0.52, 0.62, 0, -0.34, -0.03);
+      const piston = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.55, 8), edge);
+      piston.position.set(side * 0.24, -0.48, 0.12); arm.add(piston);
+      box(arm, bronze, 0.6, 0.36, 0.72, 0, -1.04, -0.12);
+      for (const x of [-0.17, 0.17]) box(arm, edge, 0.09, 0.15, 0.32, x, -1.07, -0.52);
+      armJoints.push({ shoulder, arm, piston, side });
+    }
+    const headPivot = new THREE.Group(); headPivot.position.set(0, 3.45, 0); g.add(headPivot);
+    box(headPivot, dark, 0.76, 0.14, 0.72, 0, -0.38, 0);
+    box(headPivot, bronze, 1.14, 0.66, 0.94, 0, 0.02, -0.02);
+    box(headPivot, edge, 1.16, 0.12, 0.95, 0, 0.35, -0.02);
+    box(headPivot, dark, 0.92, 0.22, 0.13, 0, 0.02, -0.51);
     const visorMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a, toneMapped: false });
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.12, 0.08), visorMat); visor.position.set(0, 3.5, -0.49); g.add(visor);
+    box(headPivot, visorMat, 0.72, 0.11, 0.05, 0, 0.04, -0.59);
     const coreMat = new THREE.MeshBasicMaterial({ color: 0xff7a1a, toneMapped: false });
     const core = new THREE.Mesh(new THREE.SphereGeometry(0.52, 16, 12), coreMat); core.position.set(0, 2.12, -0.72); g.add(core);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.1, 8, 24), new THREE.MeshStandardMaterial({ color: 0xd7a56c, roughness: 0.34, metalness: 0.8 }));
@@ -112,7 +172,7 @@ function makeEntityMesh(e) {
     const chargeHaloMat = new THREE.MeshBasicMaterial({ color: 0xf8ffff, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
     const chargeHalo = new THREE.Mesh(new THREE.RingGeometry(0.76, 1.04, 40), chargeHaloMat);
     chargeHalo.position.set(0, 2.12, -1.6); chargeHalo.visible = false; g.add(chargeHalo);
-    return { g, flashMats, core, coreMat, visorMat, rim, coreShutters, slamRing, slamRingMat, slamDisc, slamDiscMat, steamRing, steamRingMat, steamWall, steamWallMat, chargeHalo, chargeHaloMat, slamAt: -Infinity };
+    return { g, flashMats, core, coreMat, visorMat, rim, coreShutters, legs, armJoints, headPivot, ventGlow, furnaceGlow, slamRing, slamRingMat, slamDisc, slamDiscMat, steamRing, steamRingMat, steamWall, steamWallMat, chargeHalo, chargeHaloMat, slamAt: -Infinity };
   }
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 }));
   base.position.y = 0.22; g.add(base);
@@ -289,6 +349,29 @@ export function renderEnemies() {
           (Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.5) * 2, 0.3, C_AMBER, 5);
       }
       const chargeTell = e.st === 'chargeTell', slagTell = e.st === 'slagTell', groundTell = e.st === 'groundTell';
+      // Animate only the added parts. The boss transform, hitbox and core center stay as before.
+      const charging = e.st === 'charge', pounding = e.st === 'groundRecover';
+      const gait = e.st === 'enter' ? Math.sin(e.phase * 1.4) * 0.13 :
+        charging ? Math.sin(e.phase * 2.4) * 0.26 : Math.sin(now * 1.8) * 0.025;
+      v.legs[0].hip.rotation.x = gait;
+      v.legs[1].hip.rotation.x = -gait;
+      v.headPivot.rotation.y = Math.sin(now * 0.8) * 0.035;
+      v.headPivot.rotation.x = chargeTell ? 0.12 : charging ? 0.19 : slagTell ? -0.12 : groundTell ? -0.1 : 0;
+      for (const { arm, piston, side } of v.armJoints) {
+        const idle = Math.sin(now * 2.1 + side) * 0.045;
+        const pose = phaseTransition ? Math.sin(now * 23 + side) * 0.38 :
+          chargeTell ? -0.55 : charging ? 0.48 :
+          slagTell ? (side < 0 ? 0.82 : -0.2) :
+          groundTell ? -0.75 : pounding ? 0.44 :
+          steamTell ? 0.35 : steamSpin ? 0.52 + Math.sin(now * 19 + side) * 0.15 :
+          e.st === 'energyRingVolley' ? 0.3 : 0;
+        arm.rotation.x = pose + idle;
+        arm.rotation.z = side * (steamTell || steamSpin ? 0.04 : 0);
+        piston.position.y = -0.48 + Math.sin(now * (charging ? 16 : 3) + side) * 0.035;
+      }
+      const heat = 0.5 + Math.sin(now * (e.phaseThree ? 11 : 4)) * 0.14;
+      v.furnaceGlow.color.setRGB(1, 0.24 + heat * 0.2, 0.05);
+      v.ventGlow.color.setRGB(1, 0.32 + heat * 0.3, 0.08);
       const rear = groundTell ? Math.min(1, (0.5 - e.t2) * 3.2) : 0;
       v.g.position.y += rear * 0.85;
       v.g.rotation.x = rear * 0.18;
