@@ -29,6 +29,8 @@ const copyDir = (from, to) => {
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 copyDir(path.join(ROOT, 'src'), path.join(OUT, 'v', V, 'src'));
+// 3D models and other asset files ship with each version too (loaded relative to the code's own folder)
+if (fs.existsSync(path.join(ROOT, 'assets'))) copyDir(path.join(ROOT, 'assets'), path.join(OUT, 'v', V, 'assets'));
 
 let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const SCRIPT = '<script type="module" src="src/main.js"></script>';
