@@ -21,6 +21,9 @@ defineTuning('Enemies', [
   ['bossPhase2SpeedMult', 'Phase 2 speed', 1.33, 1, 2, 0.01, '×'],
   ['bossPhase3SpeedMult', 'Phase 3 speed', 1.6, 1, 2.5, 0.01, '×'],
   ['bossPhase3DamageMult', 'Phase 3 damage', 1.5, 1, 3, 0.05, '×'],
+  ['energyRingHeight', 'Energy ring height', 2.8, 1, 5, 0.1, 'm'],
+  ['energyRingSpeed', 'Energy ring speed', 10, 4, 20, 0.5, 'm/s'],
+  ['energyRingDamage', 'Energy ring damage', 3, 0, 10, 0.5, 'HP'],
   ['bossCoreOpenDuration', 'Core open time', 2.5, 0.5, 6, 0.1, 's'],
 ]);
 
@@ -47,6 +50,7 @@ export const entMax = (e) => [e.x + e.hx, e.y + e.hy, e.z + e.hz];
 export const ESHOTS = [];
 export const FIRE_PATCHES = [];
 export const GROUND_WAVES = [];
+export const ENERGY_RINGS = [];
 const BOSS_CORE = { x: 0, y: 2.12, z: -0.72, radius: 0.52 };
 const SHOT_RADII = [0.16, 0.36, 0.62];
 const SLAG_FLIGHT = 0.8, SLAG_GRAVITY = 18, SLAG_RADIUS = 0.32, SLAG_PATCH_LIFE = 3, SLAG_PATCH_RADIUS = 0.9;
@@ -54,7 +58,7 @@ const GROUND_WAVE_DEPTH = 0.42;
 const GROUND_WAVE_MIN_X = -5, GROUND_WAVE_MAX_X = 5;
 const GROUND_WAVE_FRONT_Z = -216, GROUND_WAVE_BACK_Z = -245;
 const BOSS_FIRE_SPACING = 1.2, BOSS_FIRE_RADIUS = 0.72;
-const STEAM_SPIN_TIME = 1.5, STEAM_SPIN_RADIUS = 3.5, STEAM_SPIN_BASE_SPEED = 2.5, STEAM_SPIN_DAMAGE = 3;
+const STEAM_SPIN_TIME = 1.5, STEAM_SPIN_RADIUS = 3.5, STEAM_SPIN_DAMAGE = 3, ENERGY_RING_GAP = 0.6, ENERGY_RING_HALF_DEPTH = 0.3;
 
 function isBossCoreHit(e, x, y, z, level) {
   const radius = BOSS_CORE.radius + (SHOT_RADII[level] ?? 0);
@@ -72,7 +76,7 @@ export function resetEnt(e) {
     e.groundWaveDirZ = 0; e.bossPhase = 1; e.phaseTwo = false; e.phaseThree = false; e.pendingPhase = 0;
     e.hpPerBar = tuning.bossHpPerBar; e.maxHp = e.hpPerBar * 3; e.hp = e.maxHp;
     e.phaseTransitionTimer = 0; e.phaseTransitionElapsed = 0;
-    e.coreOpenTimer = 0; e.fireTrailDistance = 0;
+    e.coreOpenTimer = 0; e.fireTrailDistance = 0; e.energyRingDelay = 0; e.energyRingsFired = 0;
     e.nextAttack = 'charge';
   }
 }
@@ -81,6 +85,7 @@ export function resetEnemies() {
   ESHOTS.length = 0;
   FIRE_PATCHES.length = 0;
   GROUND_WAVES.length = 0;
+  ENERGY_RINGS.length = 0;
 }
 
 export function activateBoss() {
@@ -93,7 +98,7 @@ export function activateBoss() {
   boss.chargeTargetZ = boss.entryZ; boss.chargeX = boss.x0; boss.cd = 0;
   boss.nextAttack = 'charge'; boss.bossPhase = 1; boss.phaseTwo = false; boss.phaseThree = false; boss.pendingPhase = 0;
   boss.phaseTransitionTimer = 0; boss.phaseTransitionElapsed = 0;
-  boss.coreOpenTimer = 0; boss.fireTrailDistance = 0;
+  boss.coreOpenTimer = 0; boss.fireTrailDistance = 0; boss.energyRingDelay = 0; boss.energyRingsFired = 0;
   boss.st = 'enter'; boss.z = boss.z0; boss.yaw = Math.PI;
   return true;
 }
@@ -103,6 +108,7 @@ function resetBossEncounter(e) {
   for (let i = ESHOTS.length - 1; i >= 0; i--) if (ESHOTS[i].kind === 'slag') ESHOTS.splice(i, 1);
   FIRE_PATCHES.length = 0;
   GROUND_WAVES.length = 0;
+  ENERGY_RINGS.length = 0;
   const door = LEVEL.named.bossDoor;
   if (door) {
     door.open = 1; door.triggered = false; door.openedAt = 0;
@@ -123,7 +129,7 @@ function startBossPhaseTransition(e) {
   e.phaseTransitionElapsed = 0; e.coreOpenTimer = 0;
   // Leave a clear arena while the Warden powers up.
   for (let i = ESHOTS.length - 1; i >= 0; i--) if (ESHOTS[i].kind === 'slag') ESHOTS.splice(i, 1);
-  FIRE_PATCHES.length = 0; GROUND_WAVES.length = 0;
+  FIRE_PATCHES.length = 0; GROUND_WAVES.length = 0; ENERGY_RINGS.length = 0;
   events.push({ type: e.phaseThree ? 'bossphase3' : 'bossphase2', e, x: e.x, y: e.y + 2.1, z: e.z });
 }
 
@@ -205,6 +211,19 @@ function launchBossGroundWave(e) {
   e.nextAttack = e.bossPhase === 3 ? 'steam' : 'charge'; e.st = 'groundRecover'; e.t2 = 0.25; e.tele = 0;
 }
 
+function launchBossEnergyRing(e) {
+  const reachX = Math.max(Math.abs(e.x - GROUND_WAVE_MIN_X), Math.abs(e.x - GROUND_WAVE_MAX_X));
+  const reachZ = Math.max(Math.abs(e.z - GROUND_WAVE_BACK_Z), Math.abs(e.z - GROUND_WAVE_FRONT_Z));
+  const index = ++e.energyRingsFired;
+  ENERGY_RINGS.push({
+    x: e.x, y: e.y, z: e.z, radius: 0, crossed: false, index, source: e,
+    maxRadius: Math.hypot(reachX, reachZ) + R + ENERGY_RING_HALF_DEPTH,
+    speed: tuning.energyRingSpeed, height: tuning.energyRingHeight,
+    damage: tuning.energyRingDamage * bossDamage(e),
+  });
+  events.push({ type: 'bossenergyring', e, x: e.x, y: e.y + 1.4, z: e.z, index });
+}
+
 function updateBoss(e, dt, attack) {
   if (e.hpPerBar !== tuning.bossHpPerBar) {
     e.hp = e.hp / e.hpPerBar * tuning.bossHpPerBar;
@@ -280,12 +299,6 @@ function updateBoss(e, dt, attack) {
       events.push({ type: 'bosssteamspin', e, x: e.x, y: e.y + 1.2, z: e.z });
     }
   } else if (e.st === 'steamSpin') {
-    const dx = p.x - e.x, dz = p.z - e.z, distance = Math.hypot(dx, dz);
-    const slide = Math.min(distance, STEAM_SPIN_BASE_SPEED * bossSpeed(e) * dt);
-    if (distance > 0) {
-      e.x = Math.max(e.chargeMinX, Math.min(e.chargeMaxX, e.x + dx / distance * slide));
-      e.z = Math.max(e.chargeBackZ, Math.min(e.chargeFrontZ, e.z + dz / distance * slide));
-    }
     e.yaw += dt * 14 * bossSpeed(e);
     if (attack && p.y < e.y + 2.4 && p.y + H > e.y &&
       Math.hypot(p.x - e.x, p.z - e.z) <= STEAM_SPIN_RADIUS + R) {
@@ -295,7 +308,17 @@ function updateBoss(e, dt, attack) {
       }
     }
     e.t2 = Math.max(0, e.t2 - dt);
-    if (e.t2 <= 0) { e.st = 'idle'; e.cd = bossRecovery(e); e.nextAttack = 'charge'; }
+    if (e.t2 <= 0) {
+      e.st = 'energyRingVolley'; e.energyRingsFired = 0; e.energyRingDelay = ENERGY_RING_GAP;
+      launchBossEnergyRing(e);
+    }
+  } else if (e.st === 'energyRingVolley') {
+    if (e.energyRingsFired === 1) {
+      e.energyRingDelay = Math.max(0, e.energyRingDelay - dt);
+      if (e.energyRingDelay <= 0) launchBossEnergyRing(e);
+    } else if (!ENERGY_RINGS.some((ring) => ring.source === e)) {
+      e.st = 'idle'; e.cd = bossRecovery(e); e.nextAttack = 'charge';
+    }
   } else if (e.st === 'groundTell') {
     e.t2 = Math.max(0, e.t2 - dt);
     if (e.t2 <= 0) launchBossGroundWave(e);
@@ -358,6 +381,7 @@ export function damageEnt(e, dmg, x, y, z, level) {
   if (kill) {
     e.alive = false; e.timer = e.respawn; state.kills += 1; events.push({ type: 'kill', e });
     if (e.kind === 'boss') {
+      ENERGY_RINGS.length = 0;
       state.cleared = true; state.timing = false;
       events.push({ type: 'bossdefeat', e, x: e.x, y: e.y + 2.1, z: e.z });
     }
@@ -476,6 +500,25 @@ export function updateEnemies(dt) {
     }
     wave.z = toZ; wave.life -= dt;
     if (wave.life <= 0) GROUND_WAVES.splice(i, 1);
+  }
+  for (let i = ENERGY_RINGS.length - 1; i >= 0; i--) {
+    const ring = ENERGY_RINGS[i];
+    const fromRadius = ring.radius;
+    const toRadius = Math.min(ring.maxRadius, fromRadius + ring.speed * dt);
+    const distance = Math.hypot(p.x - ring.x, p.z - ring.z);
+    if (!ring.crossed && distance - R <= toRadius + ENERGY_RING_HALF_DEPTH &&
+      distance + R >= fromRadius - ENERGY_RING_HALF_DEPTH) {
+      ring.crossed = true;
+      const floor = groundBelow(p.x, p.y + 0.05, p.z);
+      const feetAboveFloor = Number.isFinite(floor) ? p.y - floor : Infinity;
+      events.push({ type: 'energyringpass', index: ring.index, x: p.x, y: p.y, z: p.z, feetAboveFloor, height: ring.height });
+      if (attack && feetAboveFloor < ring.height &&
+        hurt(ring.damage * tuning.damageTaken, p.x - ring.x, p.z - ring.z)) {
+        events.push({ type: 'energyringhit', index: ring.index, x: p.x, y: p.y + 1, z: p.z });
+      }
+    }
+    ring.radius = toRadius;
+    if (ring.radius >= ring.maxRadius) ENERGY_RINGS.splice(i, 1);
   }
   for (let i = ESHOTS.length - 1; i >= 0; i--) {
     const s = ESHOTS[i];
