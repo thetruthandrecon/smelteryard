@@ -72,6 +72,29 @@ module.exports = {
       };
       return { setting: tuning.roarShake, phase2: roar(2), phase3: roar(1) };
     });
+    // the hero model: fits the collision capsule, every pose is set, and the planted boot stays on the floor
+    r.model = await page.evaluate(async () => {
+      const { heroModel: hero, renderPlayer } = await import('/src/player/model.js');
+      const THREE = await import('/src/core/three.js');
+      const G = window.__game; const { p, placeAt, state, tuning } = G;
+      G.loadLevel('yard'); state.mode = 'bot'; placeAt({ x: -4, y: 0, z: 2 });
+      const set = (o) => Object.assign(p, { vx: 0, vy: 0, vz: 0, grounded: true, sliding: false, dashTimer: 0, aimTimer: 0, charging: false, charge: 0, stun: 0, iframes: 0, faceX: 0, faceZ: -1, wallX: 1, wallZ: 0 }, o);
+      const frame = (n = 1) => { for (let i = 0; i < n; i++) renderPlayer(1 / 60, p.x, p.y, p.z); };
+      const box = () => new THREE.Box3().setFromObject(hero.group);
+      const joints = () => ['hipL', 'kneeL', 'hipR', 'kneeR', 'shL', 'elbowL', 'shR', 'elbowR'].map((k) => +hero[k].rotation.x.toFixed(2));
+      set({}); frame(60);
+      const b = box(), size = b.getSize(new THREE.Vector3());
+      const out = { height: +size.y.toFixed(2), width: +size.x.toFixed(2), soleY: +(b.min.y - p.y).toFixed(3) };
+      const poses = { idle: {}, run: { vz: -tuning.runSpeed }, jump: { grounded: false, vy: 6 }, fall: { grounded: false, vy: -6 }, wallslide: { grounded: false, sliding: true, vy: -2 }, dash: { dashTimer: 0.1, vz: -17 }, aim: { aimTimer: 0.5 } };
+      out.poses = {};
+      for (const [name, o] of Object.entries(poses)) { set(o); frame(45); out.poses[name] = joints().join(','); }
+      // the run cycle: the lower sole stays within 6 cm of the floor
+      set({ vz: -tuning.runSpeed }); let lo = 9, hi = -9;
+      for (let i = 0; i < 90; i++) { frame(); const y = box().min.y - p.y; lo = Math.min(lo, y); hi = Math.max(hi, y); }
+      out.runSole = [+lo.toFixed(3), +hi.toFixed(3)];
+      set({}); frame(60);
+      return out;
+    });
     log('player', r);
     expect(r.ko.died && r.ko.revived && r.ko.hp === 16 && r.ko.backAtStart, 'a knockout should revive you at the checkpoint with full health');
     expect(r.spikes.hp === 12 && r.spikes.lives === 3 && r.spikes.backAtStart, 'spikes should take 4 HP and send you back to the checkpoint without costing a life');
@@ -80,6 +103,10 @@ module.exports = {
     expect(r.lives.lowHpLavaCostsLife, 'lava at 4 HP or less should cost a life');
     expect(r.lives.lastKoGameOver && r.lives.lastFallGameOver, 'losing the last life should be game over');
     expect(r.lives.restartResets, 'restart should reset checkpoint, lives, position and health');
+    const M = r.model, poseSet = new Set(Object.values(M.poses));
+    expect(M.height >= 1.8 && M.height <= 2.15 && M.width <= 1.25 && Math.abs(M.soleY) <= 0.005, 'the hero model should stand on its soles, about 2 m tall and no wider than its shoulder plates');
+    expect(poseSet.size === Object.keys(M.poses).length && !Object.values(M.poses).some((v) => v.includes('NaN')), 'each hero pose (idle, run, jump, fall, wall slide, dash, aim) should set its own joint angles');
+    expect(Math.abs(M.runSole[0]) <= 0.005 && Math.abs(M.runSole[1]) <= 0.005, 'while running, the lower boot should stay planted on the floor');
     const R2 = r.roar.phase2, R3 = r.roar.phase3, set = r.roar.setting;
     expect(R2.transition && R2.phase === 2 && R2.jolt === set && R2.rumble === +(set * 0.5).toFixed(4) && R2.calm && R2.after === 0, 'the Phase 2 roar should jolt the camera by the Boss roar shake setting, rumble at half strength while the Warden powers up, then calm down');
     expect(R3.transition && R3.phase === 3 && R3.jolt === +Math.min(1, set * 1.5).toFixed(4) && R3.rumble === +Math.min(1, set * 0.75).toFixed(4) && R3.calm && R3.after === 0, 'the Phase 3 roar should shake 1.5x as hard as the Phase 2 roar, then calm down');
