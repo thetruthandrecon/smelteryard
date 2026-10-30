@@ -110,6 +110,7 @@ Either AI may add a line here when H states a decision; mention it in the PR.
   - Running out of health, or being crushed, costs a life. There are 3 lives per run, and losing the last one is game over (restart from the beginning).
   - The "N lives left" message after losing a life stays.
 - Lanes as in the table above: the boss belongs to Codex; movement, camera and combat belong to Claude.
+- Boss HUD (H, 2026-10-29): show one health bar at a time. It refills during each power-up and labels the active Phase 1, 2 or 3.
 - 2026-10-28:
   - Charged shots must beat tapping for the same time: level 1 = 4, level 2 = 12 damage (a tap is 1), adjustable in the tuning panel.
   - The Warden's glowing core is a weak spot: hits there do more damage than body hits.
@@ -126,6 +127,7 @@ A heavy furnace mech with a glowing core, in an arena behind the boss door at th
 
 | Attack | What it does | How the player beats it |
 |---|---|---|
+| Phase change | The single health bar refills during an invulnerable power-up and shows the new phase | Wait for the refill to finish before shooting |
 | Charge | Rams across the whole arena | Dash sideways out of its path at the last moment |
 | Slag lob | Arcs 3 molten blobs that leave fire for 3 s | Read the arc and keep moving |
 | Ground pound | Sends a shockwave along the floor | Jump the wave |

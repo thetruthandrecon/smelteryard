@@ -10,7 +10,7 @@ import { releaseAll, lockPointer, releasePointer, isPointerLocked } from '../pla
 import { ensureAudio, isMuted, setMuted } from '../fx/audio.js';
 import { refreshTuneOut } from './tuning-panel.js';
 
-const ui = { timer: $('timer'), cp: $('cp-label'), best: $('best-label'), pipDash: $('pip-dash'), pipAir: $('pip-air'), fps: $('fps'), toast: $('toast'), flash: $('flash'), reticle: $('reticle'), hp: $('hud-hp'), lives: $('lives'), boss: $('boss-hud'), bossRows: [...document.querySelectorAll('.boss-row')], bossFills: [1, 2, 3].map((n) => $(`boss-fill-${n}`)), bossLabel: $('boss-health-label') };
+const ui = { timer: $('timer'), cp: $('cp-label'), best: $('best-label'), pipDash: $('pip-dash'), pipAir: $('pip-air'), fps: $('fps'), toast: $('toast'), flash: $('flash'), reticle: $('reticle'), hp: $('hud-hp'), lives: $('lives'), boss: $('boss-hud'), bossFill: $('boss-fill'), bossTrack: document.querySelector('.boss-track'), bossLabel: $('boss-health-label') };
 const hpSegs = [];
 for (let i = 0; i < MAX_HP; i++) { const s = document.createElement('i'); $('hp-bar').appendChild(s); hpSegs.push(s); }
 let shownHp = -1, toastTimer = 0, hitTimer = 0, fpsFrames = 0, fpsTime = 0;
@@ -146,15 +146,16 @@ export function updateHud(dt) {
   ui.boss.classList.toggle('phase2', boss?.bossPhase === 2);
   ui.boss.classList.toggle('phase3', boss?.bossPhase === 3);
   if (boss && boss.activated) {
-    $('boss-name').textContent = 'Forge Warden';
-    ui.bossRows.forEach((row, i) => {
-      const progress = Math.max(0, Math.min(1, boss.combatReady
-        ? (boss.hp - (2 - i) * boss.hpPerBar) / boss.hpPerBar : boss.introProgress));
-      row.classList.toggle('active', boss.bossPhase === i + 1);
-      ui.bossFills[i].style.transform = `scaleX(${progress})`;
-      row.querySelector('.boss-track').setAttribute('aria-valuenow', `${Math.round(progress * 100)}`);
-    });
-    ui.bossLabel.textContent = `${Math.ceil(boss.hp)} / ${boss.maxHp} HP`;
+    const phase = boss.bossPhase;
+    const remaining = Math.max(0, Math.min(boss.hpPerBar, boss.hp - (3 - phase) * boss.hpPerBar));
+    const powerUpTime = boss.phaseTransitionElapsed + boss.phaseTransitionTimer;
+    const progress = Math.max(0, Math.min(1, !boss.combatReady ? boss.introProgress
+      : boss.st === 'phaseTransition' && powerUpTime > 0 ? boss.phaseTransitionElapsed / powerUpTime
+        : remaining / boss.hpPerBar));
+    ui.bossFill.style.transform = `scaleX(${progress})`;
+    ui.bossTrack.setAttribute('aria-label', `Forge Warden Phase ${phase} health`);
+    ui.bossTrack.setAttribute('aria-valuenow', `${Math.round(progress * 100)}`);
+    ui.bossLabel.textContent = `Phase ${phase} · ${Math.ceil(progress * boss.hpPerBar)} / ${boss.hpPerBar} HP`;
   }
   ui.pipDash.classList.toggle('on', p.dashTimer <= 0 && p.dashCD <= 0);
   ui.pipAir.classList.toggle('on', p.airDash);

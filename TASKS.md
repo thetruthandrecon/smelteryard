@@ -56,6 +56,8 @@ Done:
 - Milestone 6, item 3: Slag lob with a distinct tell/audio, three airborne landing markers, 3 HP blobs, 2 HP fire patches, adjustable enemy tuning, and the `G.ESHOTS` test fix (branch `codex/slag-lob`; PR #9; Playtest passes)
 - Milestone 6, item 4: Ground Pound with a violet tell, a visible shockwave, adjustable damage and speed, a normal-jump dodge, and wall-to-wall coverage (branch `codex/ground-wave-walls`; PR #14; Playtest passes)
 
+- Boss HUD: one visible health bar refills during power-ups and labels the active phase (branch `codex/boss-single-bar`; PR #26; Playtest passes)
+
 In progress: nothing
 
 Blocked: nothing
@@ -74,3 +76,4 @@ Blocked: nothing
   - The big glowing core in its chest should take more damage when hit (Codex).
   - Charging the gun should do more damage (Claude).
   - After a merge the play link kept showing the old version until a hard refresh (Claude, refresh fix).
+- 2026-10-29: H prefers one boss health bar, with its current phase labelled and a visible refill during each power-up.
