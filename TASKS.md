@@ -43,6 +43,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Phase 3 Steam spin stops dealing steam damage 0.5 s before its energy rings launch; the safe interval has a visible and audible charge-up (branch `codex/steam-before-rings`).
 - Phase 3 energy rings: Steam spin stays in place, then launches two tall arena-wide rings 0.6 s apart; wall-jumps clear them (branch `codex/phase3-energy-rings`; PR #25; Playtest passes)
 - Forge Warden three-phase fight: three sequential 60 HP bars, two 3 s power-ups, 1.6× speed and 1.5× damage in Phase 3, and Steam spin (branch `codex/boss-three-phases`; PR #23; Playtest passes)
 - Warden Phase 2 transition: 2 s invulnerable power-up with a roar, sparks and core flashes; one 1.33× Phase 2 speed slider scales Charge, alignment, Slag flight, Ground wave and recovery (branch `codex/phase2-transition`; PR #21; Playtest passes)

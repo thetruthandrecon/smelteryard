@@ -526,8 +526,22 @@ module.exports = {
         hits: G.events.filter((e) => e.type === 'energyringhit').length,
         damage: 16 - G.p.hp,
       };
+
+      const closeBoss = setup(0.5 + G.STEP / 2);
+      closeBoss.x = 1.5; // 3.1 m from the player at the side wall: inside the steam reach.
+      G.step(G.STEP);
+      G.input.moveX = 1; G.input.jumpQueued = true; G.input.jumpHeld = true;
+      G.step(G.STEP); run(0.2);
+      G.input.jumpQueued = true; G.step(G.STEP);
+      const closeCharge = {
+        started: G.events.filter((e) => e.type === 'bosssteamcharge').length,
+        wallJumps: G.events.filter((e) => e.type === 'walljump').length,
+        steamHits: G.events.filter((e) => e.type === 'bosssteamhit').length,
+        ringLaunches: G.events.filter((e) => e.type === 'bossenergyring').length,
+        damage: 16 - G.p.hp,
+      };
       return { tuning: { height: G.tuning.energyRingHeight, speed: G.tuning.energyRingSpeed, damage: G.tuning.energyRingDamage },
-        grounded, plainJump, wallJump };
+        grounded, plainJump, wallJump, closeCharge };
     });
     log('Phase 3 energy rings', energyRings);
     expect(energyRings.tuning.height === 2.8 && energyRings.tuning.speed === 10 && energyRings.tuning.damage === 3 &&
@@ -544,6 +558,10 @@ module.exports = {
       energyRings.wallJump.passes.length === 2 && energyRings.wallJump.passes.every((e) => e.feet >= 2.8) &&
       energyRings.wallJump.hits === 0 && energyRings.wallJump.damage === 0,
       'real repeated wall-jump input at a side wall should lift the player over both energy rings');
+    expect(energyRings.closeCharge.started === 1 && energyRings.closeCharge.wallJumps >= 1 &&
+      energyRings.closeCharge.steamHits === 0 && energyRings.closeCharge.ringLaunches === 0 &&
+      energyRings.closeCharge.damage === 0,
+      'the final 0.5 s charge-up should let a player beside the Warden wall-jump without steam knockback');
 
 
   },

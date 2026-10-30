@@ -58,6 +58,7 @@ const GROUND_WAVE_DEPTH = 0.42;
 const GROUND_WAVE_MIN_X = -5, GROUND_WAVE_MAX_X = 5;
 const GROUND_WAVE_FRONT_Z = -216, GROUND_WAVE_BACK_Z = -245;
 const BOSS_FIRE_SPACING = 1.2, BOSS_FIRE_RADIUS = 0.72;
+export const STEAM_CHARGE_TIME = 0.5;
 const STEAM_SPIN_TIME = 1.5, STEAM_SPIN_RADIUS = 3.5, STEAM_SPIN_DAMAGE = 3, ENERGY_RING_GAP = 0.6, ENERGY_RING_HALF_DEPTH = 0.3;
 
 function isBossCoreHit(e, x, y, z, level) {
@@ -300,14 +301,18 @@ function updateBoss(e, dt, attack) {
     }
   } else if (e.st === 'steamSpin') {
     e.yaw += dt * 14 * bossSpeed(e);
-    if (attack && p.y < e.y + 2.4 && p.y + H > e.y &&
+    const steamWasActive = e.t2 > STEAM_CHARGE_TIME;
+    e.t2 = Math.max(0, e.t2 - dt);
+    if (steamWasActive && e.t2 <= STEAM_CHARGE_TIME) {
+      events.push({ type: 'bosssteamcharge', e, x: e.x, y: e.y + 2.12, z: e.z });
+    }
+    if (attack && e.t2 > STEAM_CHARGE_TIME && p.y < e.y + 2.4 && p.y + H > e.y &&
       Math.hypot(p.x - e.x, p.z - e.z) <= STEAM_SPIN_RADIUS + R) {
       if (hurt(STEAM_SPIN_DAMAGE * bossDamage(e) * tuning.damageTaken, p.x - e.x, p.z - e.z)) {
         events.push({ type: 'bosssteamhit', x: p.x, y: p.y + 1, z: p.z });
         if (p.dead > 0) { resetBossEncounter(e); return; }
       }
     }
-    e.t2 = Math.max(0, e.t2 - dt);
     if (e.t2 <= 0) {
       e.st = 'energyRingVolley'; e.energyRingsFired = 0; e.energyRingDelay = ENERGY_RING_GAP;
       launchBossEnergyRing(e);
