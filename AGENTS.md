@@ -60,8 +60,16 @@ If your task needs a change in the other lane, don't edit it. Write the request 
   - Import Three.js only as `import * as THREE from '../core/three.js'`.
   - Lanes import each other freely, so imports form cycles. **Top-level code must never call a function from another lane, and must never read another lane's values.** Use them inside functions only. Core modules (`three`, `util`, `tuning`, `world`, `render`) import no lanes.
   - Wrap all `localStorage` access in the `store` helper.
-  - The only external sources allowed are Three.js from jsdelivr (exact version) and Google Fonts. Everything else is drawn in code: textures on canvases, sound with WebAudio. No new dependencies without H's approval.
+  - The only external sources allowed are Three.js from jsdelivr (exact version, including its loaders) and Google Fonts. 3D models come from model files (see "3D models" below); everything else is drawn in code: textures on canvases, sound with WebAudio. No new dependencies without H's approval.
 - **Test hook.** `window.__game` in `src/main.js` exposes state for the tests. Keep its fields.
+
+## 3D models (H approved on 2026-10-30)
+- **Files:** `assets/models/<name>.glb`, one per character or prop, textures packed inside. Aim for at most 30,000 triangles, 5 MB and 2048 px textures per model, so the game stays smooth in a browser.
+- **Where they come from:** H makes them. An image generator draws a character sheet from the prompts in `assets/models/PROMPTS.md`, an image-to-3D tool (for example Meshy or Tripo) turns it into a model, and Mixamo adds a skeleton and animations. Only tools whose terms allow using the result in the game. Every design is our own: the classic action-platformer robot heroes are the inspiration, never something to copy.
+- **Loading:** with the GLTFLoader from jsdelivr at the exact Three.js version, through one shared helper in `src/core/` (added with the first model, H approved). Load inside functions, never at the top level. Resolve file paths from the code's own folder (`new URL('../../assets/models/hero.glb', import.meta.url)`), so they work both locally and in the published `v/<commit>/` folder, which `tools/build-site.cjs` fills with `assets/` too.
+- **Models are looks only:** hitboxes, physics, timing and every gameplay rule stay in code and never depend on a model. Keep the code-built look as the fallback while a model loads, if it fails to load, and in the tests.
+- **Animation** plays while rendering (an AnimationMixer driven from the render hooks), never inside the simulation step, so the game stays deterministic.
+- **Lanes:** the hero's model and animations are Claude's; enemies, the boss, props and the level are Codex's.
 
 ## Git rules
 1. Before anything, read `AGENTS.md` and `TASKS.md`, then `git pull` on `main`. Check open pull requests so you know what the other AI is changing.
@@ -122,6 +130,7 @@ Either AI may add a line here when H states a decision; mention it in the PR.
   - The Forge Warden has three sequential health bars (default 60 HP each) and two invulnerable power-ups (default 3 s). Phase 2 is 1.33× faster; Phase 3 is 1.6× faster, deals 1.5× damage, and adds Steam spin with a 0.5 s tell.
   - In Phase 3 the Warden's Steam spin stays in place for about 1.5 s, then fires two 2.8 m tall energy rings 0.6 s apart at about 10 m/s. A normal jump cannot clear them; wall-jumping at the side wall can.
 - 2026-10-30:
+  - 3D model files are allowed for the hero, enemies and props (see "3D models"). Classic robot action heroes are the inspiration; every character is our own design.
   - Hit-stop: the game holds still for a moment when a charged shot lands (longer on the Warden's core and on the final blow). Tuning → Combat → Hit-stop; the game loop asks `simTime(dt)` in `src/combat/shots.js` how much game time passes.
   - The camera stays over the right shoulder against walls (H checked the right-wall view and is happy with it).
 
