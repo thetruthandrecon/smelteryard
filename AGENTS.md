@@ -46,7 +46,7 @@ If your task needs a change in the other lane, don't edit it. Write the request 
 
   Game logic must be deterministic: no `Math.random()`, `Date` or `performance.now()` inside update functions. The test bots depend on this. Randomness is fine in rendering and effects.
 - **Rendering.** Each frame `src/main.js` calls `renderPlayer`, `renderShots`, `renderEnemies`, `renderLevel`, `renderEmbers`, `renderWorld` and `updateHud`. Draw from the simulation state; never change it while rendering.
-- **Hooks the core calls.** Keep these names and signatures: `updatePlayer`, `placeAt`, `updateFire`, `updateShots`, `resetShots`, `renderShots`, `updateEnemies`, `resetEnemies`, `renderEnemies`, `buildEnemyVisuals`, `setupLevel`, `updateHazards`, `resetHazards`, `updateCourse`, `updatePickups`, `resetPickups`, `buildLevelVisuals`, `renderLevel`, `markCheckpoints`, `gatherInput`, `updateCamera`, `renderPlayer`, `updateParticles`, `renderEmbers`, `initUI`, `updateHud`, `initTuningPanel`. Grow a feature inside your lane's hook. For example, a boss updates from inside `updateEnemies`, renders from `renderEnemies` and resets in `resetEnemies`. If you truly need a new hook, ask through `TASKS.md`.
+- **Hooks the core calls.** Keep these names and signatures: `updatePlayer`, `placeAt`, `updateFire`, `updateShots`, `resetShots`, `renderShots`, `updateEnemies`, `resetEnemies`, `renderEnemies`, `buildEnemyVisuals`, `setupLevel`, `updateHazards`, `resetHazards`, `updateCourse`, `updatePickups`, `resetPickups`, `buildLevelVisuals`, `renderLevel`, `markCheckpoints`, `gatherInput`, `updateCamera`, `simTime`, `renderPlayer`, `updateParticles`, `renderEmbers`, `initUI`, `updateHud`, `initTuningPanel`. Grow a feature inside your lane's hook. For example, a boss updates from inside `updateEnemies`, renders from `renderEnemies` and resets in `resetEnemies`. If you truly need a new hook, ask through `TASKS.md`.
 - **Events, not direct calls, for effects.**
   - The simulation pushes `events.push({ type: 'jump', ... })`. Any lane reacts with `on('jump', (e) => ...)` from `src/core/world.js`.
   - Put a sound or effect in the lane that owns the event's meaning. Several lanes can react to one event (e.g. `die`: the player lane plays the sound, the UI shows the toast).
@@ -121,6 +121,9 @@ Either AI may add a line here when H states a decision; mention it in the PR.
   - A practice win doesn't count as a Smelter Yard best time.
   - The Forge Warden has three sequential health bars (default 60 HP each) and two invulnerable power-ups (default 3 s). Phase 2 is 1.33× faster; Phase 3 is 1.6× faster, deals 1.5× damage, and adds Steam spin with a 0.5 s tell.
   - In Phase 3 the Warden's Steam spin stays in place for about 1.5 s, then fires two 2.8 m tall energy rings 0.6 s apart at about 10 m/s. A normal jump cannot clear them; wall-jumping at the side wall can.
+- 2026-10-30:
+  - Hit-stop: the game holds still for a moment when a charged shot lands (longer on the Warden's core and on the final blow). Tuning → Combat → Hit-stop; the game loop asks `simTime(dt)` in `src/combat/shots.js` how much game time passes.
+  - The camera stays over the right shoulder against walls (H checked the right-wall view and is happy with it).
 
 ## Milestone 6: the boss (Forge Warden, working name)
 A heavy furnace mech with a glowing core, in an arena behind the boss door at the end of Smelter Yard.

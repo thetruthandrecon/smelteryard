@@ -12,7 +12,7 @@ import { hurt } from './player/health.js';
 import { gatherInput } from './player/input.js';
 import { camState, updateCamera } from './player/camera.js';
 import { renderPlayer } from './player/model.js';
-import { SHOTS, aimRay, renderShots } from './combat/shots.js';
+import { SHOTS, aimRay, renderShots, simTime } from './combat/shots.js';
 import { ESHOTS } from './enemies/enemies.js';
 import { renderEnemies } from './enemies/models.js';
 import { updateParticles, renderEmbers } from './fx/particles.js';
@@ -25,7 +25,8 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   gatherInput(dt);
   if (isPlaying()) {
-    acc += dt;
+    // hit-stop: after a big hit no game time passes for a moment (sparks and screen shake keep moving)
+    acc += simTime(dt);
     let n = 0;
     while (acc >= STEP && n < 12) { step(STEP); acc -= STEP; n++; }
     if (n === 12) acc = 0;

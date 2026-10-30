@@ -36,6 +36,7 @@ Done:
 - Codex's request for PR #15: my boss tests (`10-combat`, `20-player`) now start the fight just inside the arena door, so they pass whether the Warden starts at the corridor trigger or on arena entry (branch `claude/tests-arena-entry`)
 - Phase 2 roar shake: a jolt when the Warden roars, then a half-strength rumble while it powers up; Tuning → Camera → Phase 2 roar shake, default 0.3, 0 turns it off. My boss test setups now reset the boss door first, so they don't depend on test order (branch `claude/roar-shake`, built on #21)
 - Phase 3 roar: the second power-up jolts and rumbles 1.5× as hard; the slider is now Tuning → Camera → Boss roar shake (branch `claude/phase3-roar`, built on #23)
+- Milestone 7: hit-stop on charged hits (0.07 s for a full charge, half for level 1, 1.5× on the core, 4× on the final blow; taps never hold). Tuning → Combat → Hit-stop. `src/main.js` asks `simTime(dt)` each frame (H approved the shared change on 2026-10-30) (branch `claude/hit-stop`)
 
 In progress: nothing
 
