@@ -188,15 +188,23 @@ export function attachHeroGlb({ scene: model, animations }, ghostCopies = []) {
   model.position.y = hero.group.position.y - box.min.y; // feet on the floor (in the model's own units)
   pose();
   // the boot soles: skin near the floor that moves with the feet, checked each frame so a boot never sinks in
+  // (per boot: its lowest points and its toe, heel and side edges, about 50 points, so the check stays cheap)
   H.skinned = skinned; H.soles = [];
   if (skinned) {
-    const feet = ['LeftFoot', 'LeftToeBase', 'LeftToe_End', 'RightFoot', 'RightToeBase', 'RightToe_End'].map((n) => skinned.skeleton.bones.indexOf(model.getObjectByName(BONE(n)))).filter((i) => i >= 0);
     const geo = skinned.geometry, sIdx = geo.attributes.skinIndex, sW = geo.attributes.skinWeight, v = new THREE.Vector3(), floor = hero.group.position.y;
-    for (let i = 0; i < geo.attributes.position.count; i++) {
-      let w = 0; for (let j = 0; j < 4; j++) if (feet.includes(sIdx.getComponent(i, j))) w += sW.getComponent(i, j);
-      if (w < 0.5) continue;
-      skinned.getVertexPosition(i, v); skinned.localToWorld(v);
-      if (v.y - floor < 0.12) H.soles.push(i);
+    for (const side of ['Left', 'Right']) {
+      const feet = ['Foot', 'ToeBase', 'Toe_End'].map((n) => skinned.skeleton.bones.indexOf(model.getObjectByName(BONE(side + n)))).filter((i) => i >= 0);
+      const cand = [];
+      for (let i = 0; i < geo.attributes.position.count; i++) {
+        let w = 0; for (let j = 0; j < 4; j++) if (feet.includes(sIdx.getComponent(i, j))) w += sW.getComponent(i, j);
+        if (w < 0.5) continue;
+        skinned.getVertexPosition(i, v); skinned.localToWorld(v);
+        if (v.y - floor < 0.12) cand.push({ i, x: v.x, y: v.y, z: v.z });
+      }
+      const pick = new Set();
+      const take = (key, dir, n, maxY) => cand.filter((c) => c.y - floor < maxY).sort((a, b) => dir * (b[key] - a[key])).slice(0, n).forEach((c) => pick.add(c.i));
+      take('y', -1, 24, 1); take('z', 1, 8, 0.06); take('z', -1, 8, 0.06); take('x', 1, 6, 0.06); take('x', -1, 6, 0.06);
+      H.soles.push(...pick);
     }
   }
   // the cannon's muzzle: the far end of the skin around the right hand
