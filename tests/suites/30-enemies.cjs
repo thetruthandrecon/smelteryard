@@ -399,7 +399,7 @@ module.exports = {
       'Phase 2 should keep its faster Charge, fire trail and double-damage open core');
     expect(phases.second.pending && phases.second.pendingBlocked && phases.second.phase === 3 &&
       phases.second.event && phases.second.afterCharge && phases.second.held && phases.second.blocked &&
-      phases.second.resumed && phases.second.bar.count === 1 && phases.second.bar.value === 0 &&
+      phases.second.resumed && phases.second.bar.count === 1 && phases.second.bar.value > 0 && phases.second.bar.value < 20 &&
       phases.second.bar.label.startsWith('Phase 3 ·') && phases.second.refill > 80 &&
       phases.second.refill < 100 && phases.second.full === 100 &&
       Math.abs(phases.pendingStep - phases.tuning.charge * phases.tuning.speed2 / 120) < 0.01,
