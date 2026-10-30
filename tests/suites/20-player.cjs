@@ -156,5 +156,52 @@ module.exports = {
       expect(m.sameThree, `assets/models/${n}.glb should be built with the game's own Three.js (import map in index.html)`);
       expect(m.ownCopy, `each loadModel('${n}') call should get its own copy`);
     }
+
+    // the 3D model hero (assets/models/hero.glb): stands on the floor at the code-built hero's height, picks the right
+    // clip for each move, points the cannon along the aim, and gives way to the code-built hero again when removed
+    const glb = await page.evaluate(async () => {
+      const M = await import('/src/player/model.js'), { loadModel } = await import('/src/core/models.js'), THREE = await import('/src/core/three.js');
+      const G = window.__game; const { p, placeAt, state, tuning, aimRay, cam } = G;
+      G.loadLevel('yard'); state.mode = 'bot'; placeAt({ x: -4, y: 0, z: 2 });
+      const copies = await Promise.all([0, 1, 2].map(() => loadModel('hero')));
+      M.attachHeroGlb(await loadModel('hero'), copies);
+      const H = M.heroGlb, hero = M.heroModel;
+      let skinned = null; H.model.traverse((o) => { if (o.isSkinnedMesh) skinned = o; });
+      const set = (o) => Object.assign(p, { vx: 0, vy: 0, vz: 0, grounded: true, sliding: false, dashTimer: 0, aimTimer: 0, charging: false, charge: 0, stun: 0, iframes: 0, faceX: 0, faceZ: -1, wallX: 1, wallZ: 0 }, o);
+      const frame = (n = 1) => { for (let i = 0; i < n; i++) M.renderPlayer(1 / 60, p.x, p.y, p.z); };
+      const box = () => { hero.group.updateMatrixWorld(true); skinned.skeleton.update(); return new THREE.Box3().setFromObject(H.model, true); };
+      const out = { codeBuiltHidden: !hero.body.visible, clips: Object.keys(H.actions).sort().join(','), muzzle: !!H.muzzle };
+      set({}); frame(30);
+      const b = box(); out.height = +(b.max.y - b.min.y).toFixed(2); out.idleFeet = +(b.min.y - p.y).toFixed(3);
+      set({ vz: -tuning.runSpeed }); let lo = 9, hi = -9;
+      for (let i = 0; i < 40; i++) { frame(); const y = box().min.y - p.y; lo = Math.min(lo, y); hi = Math.max(hi, y); }
+      out.runFeet = [+lo.toFixed(3), +hi.toFixed(3)];
+      const poses = { idle: {}, run: { vz: -tuning.runSpeed }, jump: { grounded: false, vy: 6 }, fall: { grounded: false, vy: -6 }, wallslide: { grounded: false, sliding: true, vy: -2 }, dash: { dashTimer: 0.1, vz: -17 } };
+      out.clipFor = {};
+      for (const [name, o] of Object.entries(poses)) { set(o); frame(20); out.clipFor[name] = H.clip; }
+      set({}); H.landT = 0.3; frame(2); out.clipFor.land = H.clip; H.landT = 0;
+      // aiming: the cannon forearm lines up with the aim ray, up and down too
+      out.aimDeg = [];
+      for (const pitch of [0, 0.35, -0.3]) {
+        cam.pitch = pitch; set({ aimTimer: 0.5 }); frame(30);
+        const r = aimRay(), a = H.bones.RightForeArm.getWorldPosition(new THREE.Vector3()), h = H.bones.RightHand.getWorldPosition(new THREE.Vector3());
+        out.aimDeg.push(+(h.sub(a).normalize().angleTo(new THREE.Vector3(r.fx, r.fy, r.fz)) * 180 / Math.PI).toFixed(1));
+      }
+      cam.pitch = 0; set({}); frame(30);
+      out.muzzleNearHand = +H.muzzle.getWorldPosition(new THREE.Vector3()).distanceTo(H.bones.RightHand.getWorldPosition(new THREE.Vector3())).toFixed(2);
+      M.detachHeroGlb();
+      out.restored = hero.body.visible && !M.heroGlb.wrap && hero.group.children.every((c) => c === hero.body);
+      set({}); frame(30);
+      return out;
+    });
+    log('hero model file', glb);
+    expect(glb.codeBuiltHidden && glb.muzzle && glb.clips === 'fall,idle,jump,land,run', 'the 3D hero should replace the code-built body and bring its five clips and a cannon muzzle');
+    expect(glb.height >= 1.9 && glb.height <= 2.1 && Math.abs(glb.idleFeet) <= 0.03, 'the 3D hero should be about 2 m tall and stand on the floor');
+    expect(glb.runFeet[0] >= -0.03 && glb.runFeet[0] <= 0.03, `the 3D hero's boots should touch the floor while running and never sink into it (lowest ${glb.runFeet[0]} m)`);
+    const C = glb.clipFor;
+    expect(C.idle === 'idle' && C.run === 'run' && C.jump === 'jump' && C.fall === 'fall' && C.wallslide === 'fall' && C.dash === 'run' && C.land === 'land', `the 3D hero should pick the clip for each move (${JSON.stringify(C)})`);
+    expect(glb.aimDeg.every((d) => d <= 8), `the cannon arm should point along the aim (off by ${glb.aimDeg.join(', ')} degrees)`);
+    expect(glb.muzzleNearHand <= 0.35, 'the muzzle glow should sit at the cannon');
+    expect(glb.restored, 'removing the 3D hero should bring the code-built hero back');
   },
 };
