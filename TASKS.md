@@ -37,6 +37,7 @@ Done:
 - Phase 2 roar shake: a jolt when the Warden roars, then a half-strength rumble while it powers up; Tuning → Camera → Phase 2 roar shake, default 0.3, 0 turns it off. My boss test setups now reset the boss door first, so they don't depend on test order (branch `claude/roar-shake`, built on #21)
 - Phase 3 roar: the second power-up jolts and rumbles 1.5× as hard; the slider is now Tuning → Camera → Boss roar shake (branch `claude/phase3-roar`, built on #23)
 - Milestone 7: hit-stop on charged hits (0.07 s for a full charge, half for level 1, 1.5× on the core, 4× on the final blow; taps never hold). Tuning → Combat → Hit-stop. `src/main.js` asks `simTime(dt)` each frame (H approved the shared change on 2026-10-30) (branch `claude/hit-stop`)
+- Milestone 7: new hero model (jointed knees and elbows, angled shoulder plates, faceplate and wrap-around visor, swept crest, belt, twin back thrusters, banded arm cannon; same colours and size) and animations (bent-knee run with torso twist, idle breathing, separate jump and fall poses, hand on the wall when sliding, two-handed aim brace, knees bend on hard landings, the planted boot stays on the floor) (branch `claude/hero-model`)
 
 In progress: nothing
 
