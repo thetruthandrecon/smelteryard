@@ -199,17 +199,17 @@ module.exports = {
     log('enemies', r);
     await page.waitForFunction(() => {
       const track = document.querySelector('.boss-track');
-      return !document.getElementById('boss-hud').hidden && track && track.getAttribute('aria-valuenow') === '97';
+      return !document.getElementById('boss-hud').hidden && track && track.getAttribute('aria-valuenow') === '94';
     }, null, { timeout: 3000 });
-    const bossHealthBar = await page.evaluate(() => ({ value: document.querySelector('.boss-track').getAttribute('aria-valuenow'), label: document.getElementById('boss-health-label').textContent }));
+    const bossHealthBar = await page.evaluate(() => ({ values: [...document.querySelectorAll('.boss-track')].map((el) => el.getAttribute('aria-valuenow')), labels: [...document.querySelectorAll('.boss-phase-label')].map((el) => el.textContent), total: document.getElementById('boss-health-label').textContent }));
     log('boss health bar after hit', bossHealthBar);
     expect(r.turret.hits >= 1 && r.turret.firstKnock > 0, 'the turret should hit and knock back a player standing in front of it');
     expect(r.walker.repeatable && !r.walker.stuck && r.walker.flips >= 2, 'the walker should patrol the same way every time and turn at both ends');
     expect(r.walker.contactDamage > 0, 'touching a walker should hurt');
     expect(r.walker.destroyedBy3Shots && r.walker.respawnedHome, 'a walker should die to 3 shots and respawn at home');
     expect(r.flyer.states === 'hover>tele>swoop>return' && r.flyer.hurtPlayer && r.flyer.backHome, 'the flyer should hover, telegraph, swoop, hit, and return home');
-    expect(r.bossBlockedShot.hp === 100 && r.bossBlockedShot.impact && r.bossBlockedShot.shotRemoved, 'an intro-blocked boss shot should spark and stop without damaging the boss');
-    expect(r.bossReady.activated && r.bossReady.combatReady && r.bossReady.damageable && r.bossDamage.hp === 99 && r.bossDamage.impact, 'the Warden should become damageable at full intro and show impacts while losing health');
+    expect(r.bossBlockedShot.hp === 180 && r.bossBlockedShot.impact && r.bossBlockedShot.shotRemoved, 'an intro-blocked boss shot should spark and stop without damaging the boss');
+    expect(r.bossReady.activated && r.bossReady.combatReady && r.bossReady.damageable && r.bossDamage.hp === 179 && r.bossDamage.impact, 'the Warden should become damageable at full intro and show impacts while losing health');
     expect(r.bossContactDamage === 3, 'touching the Warden should deal 3 HP contact damage');
     expect(r.bossCharge.warned && r.bossCharge.linedUpDuringTell && r.bossCharge.alignedX === 2.5 && r.bossCharge.started && r.bossCharge.laneLocked && r.bossCharge.frontReached && r.bossCharge.reverseChargeStarted && r.bossCharge.fullCross && r.bossCharge.damage === 4 && r.bossCharge.speed === 18 && r.bossCharge.lane === 25.8 && r.bossCharge.frontZ === -218 && r.bossCharge.backZ === -243.8, 'the Warden should track the player during its tell, lock the lane, and Charge across the full arena for 4 HP at 18 m/s');
     expect(r.bossCoreHit.damage === 1.5 && r.bossCoreHit.weakspot && r.bossBodyHit.damage === 1 && !r.bossBodyHit.weakspot, 'a chest-core hit should deal 1.5x the damage of an otherwise identical body hit');
@@ -223,95 +223,141 @@ module.exports = {
     expect(r.groundWaveSideWall.groundedAtTell && r.groundWaveSideWall.hit && r.groundWaveSideWall.damage === 3 && r.groundWaveSideWall.x === 0 && r.groundWaveSideWall.width === 10 && r.groundWaveSideWall.endZ === -245, 'the full-width Ground Pound wave should hit a grounded player beside the side wall and travel to the back wall');
     expect(r.groundWaveDoorWall.groundedAtTell && r.groundWaveDoorWall.hit && r.groundWaveDoorWall.damage === 3 && r.groundWaveDoorWall.x === 0 && r.groundWaveDoorWall.width === 10 && r.groundWaveDoorWall.endZ === -216, 'the Ground Pound wave should hit a grounded player beside the door wall and travel to its endpoint');
     expect(r.groundWaveJump.warned && r.groundWaveJump.jumped && r.groundWaveJump.groundedAtPass === false && !r.groundWaveJump.hit && r.groundWaveJump.damage === 0, 'a normal jump timed to the wave should pass over it without taking damage');
-    expect(bossHealthBar.value === '97' && bossHealthBar.label === '97%', 'the boss health bar should show health lost to body and core hits');
-    const phaseTwo = await page.evaluate(async () => {
+    expect(JSON.stringify(bossHealthBar.values) === JSON.stringify(['94', '100', '100']) && JSON.stringify(bossHealthBar.labels) === JSON.stringify(['Phase 1', 'Phase 2', 'Phase 3']) && bossHealthBar.total === '177 / 180 HP', 'three labelled bars should drain Phase 1 first and show total HP');
+    const phases = await page.evaluate(async () => {
       const G = window.__game;
       const { damageEnt, FIRE_PATCHES, GROUND_WAVES } = await import('/src/enemies/enemies.js');
       const { dispatchEvents } = await import('/src/core/world.js');
+      const { updateHud } = await import('/src/ui/ui.js');
       const { run } = window.__t;
       G.loadLevel('smelter'); G.state.mode = 'bot'; G.state.noEnemies = true; G.restartCourse();
-      G.step(G.STEP); // let the fresh-run course step reset the sealed door
+      G.step(G.STEP);
       G.state.cp = 3; G.state.started = true;
       G.placeAt({ x: 0, y: 28, z: -216.2 }); G.step(G.STEP); run(3.1);
       const boss = G.ENTS.find((e) => e.kind === 'boss');
       const bodyHit = () => [boss.x, boss.y + 0.5, boss.z + boss.hz];
-      boss.hp = 50;
-      const phaseAtHalf = boss.phaseTwo;
-      boss.st = 'chargeTell'; boss.t2 = 0.4;
+      const bars = () => {
+        updateHud(G.STEP);
+        return {
+          values: [...document.querySelectorAll('.boss-track')].map((el) => Number(el.getAttribute('aria-valuenow'))),
+          active: [...document.querySelectorAll('.boss-row')].findIndex((el) => el.classList.contains('active')) + 1,
+        };
+      };
+      const initial = { hp: boss.hp, max: boss.maxHp, perBar: boss.hpPerBar, bars: bars() };
+      boss.hp = 121; boss.st = 'chargeTell'; boss.t2 = 0.4;
       let eventStart = G.events.length;
-      damageEnt(boss, 1, ...bodyHit(), 0);
-      const phaseEvent = G.events.slice(eventStart).some((e) => e.type === 'bossphase2');
-      const cancelledTell = boss.st === 'phaseTransition' && boss.t2 === 0;
-      const switchedBelowHalf = boss.phaseTwo && boss.hp === 49 && !boss.damageable;
-      const hpBeforeBlocked = boss.hp;
+      damageEnt(boss, 12, ...bodyHit(), 0);
+      const first = {
+        hp: boss.hp, phase: boss.bossPhase, cancelledTell: boss.st === 'phaseTransition' && boss.t2 === 0,
+        event: G.events.slice(eventStart).some((e) => e.type === 'bossphase2'), bars: bars(),
+      };
       eventStart = G.events.length;
-      damageEnt(boss, 10, ...bodyHit(), 0);
-      const blocked = boss.hp === hpBeforeBlocked && G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked);
-      eventStart = G.events.length;
-      run(1.75);
-      const held = boss.st === 'phaseTransition' && !boss.damageable &&
-        !G.events.slice(eventStart).some((e) => ['bosscharge', 'bossslag', 'bossgroundslam'].includes(e.type));
-      run(0.35);
-      const resumed = boss.st === 'idle' && boss.damageable && boss.phaseTransitionTimer === 0;
+      damageEnt(boss, 4, ...bodyHit(), 0);
+      first.blocked = boss.hp === 120 && G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked);
+      G.placeAt({ x: 4, y: 28, z: -220 }); G.p.iframes = 99; G.state.noEnemies = false;
+      eventStart = G.events.length; run(2.75);
+      first.held = boss.st === 'phaseTransition' && !boss.damageable &&
+        !G.events.slice(eventStart).some((e) => ['bosscharge', 'bossslag', 'bossgroundslam', 'bosssteamspin'].includes(e.type));
+      G.state.noEnemies = true; run(0.35);
+      first.resumed = boss.st === 'idle' && boss.damageable;
 
-      // A Charge already moving finishes at its original speed before the pause.
-      boss.phaseTwo = false; boss.phaseTwoPending = false; boss.damageable = true; boss.hp = 50;
-      boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
-      boss.chargeDirZ = 1; boss.chargeTargetZ = boss.chargeFrontZ; boss.fireTrailDistance = 0;
-      FIRE_PATCHES.length = 0;
-      G.placeAt({ x: 4, y: 28, z: -220 }); G.p.iframes = 99;
-      damageEnt(boss, 1, ...bodyHit(), 0);
-      const chargeContinues = boss.st === 'charge' && boss.phaseTwoPending && !boss.phaseTwo;
-      const beforePhaseOneZ = boss.z; G.step(G.STEP);
-      const originalChargeStep = boss.z - beforePhaseOneZ;
-      run(0.8);
-      const chargeThenTransition = boss.st === 'phaseTransition' && boss.phaseTwo && !boss.damageable &&
-        FIRE_PATCHES.filter((fire) => fire.source === 'charge').length === 0;
-      run(2.1);
-
-      // The one Phase 2 multiplier speeds Charge, Slag flight, wave and recovery.
+      // Phase 2 keeps the existing faster Charge, fire trail, and open-core window.
       boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
       boss.chargeDirZ = 1; boss.chargeTargetZ = boss.chargeFrontZ; boss.fireTrailDistance = 0;
       G.state.noEnemies = false;
-      const beforeZ = boss.z; G.step(G.STEP);
-      const chargeStep = boss.z - beforeZ;
+      const phase2FromZ = boss.z; G.step(G.STEP);
+      const phase2Step = boss.z - phase2FromZ;
       run(0.25);
       const trail = FIRE_PATCHES.filter((fire) => fire.source === 'charge');
       const fire = trail[0], fireLife = fire?.life ?? 0;
       let fireDamage = 0, fireHit = false;
       if (fire) {
-        G.placeAt({ x: fire.x, y: 28, z: fire.z });
-        G.p.hp = 16; G.p.iframes = 0;
+        G.placeAt({ x: fire.x, y: 28, z: fire.z }); G.p.hp = 16; G.p.iframes = 0;
         eventStart = G.events.length; G.step(G.STEP);
         fireDamage = 16 - G.p.hp;
         fireHit = G.events.slice(eventStart).some((e) => e.type === 'bossfirehit');
       }
-      G.state.noEnemies = true; G.p.iframes = 99;
-      run(0.6);
-      const recovery = boss.cd;
-
+      G.state.noEnemies = true; G.p.iframes = 99; run(0.6);
+      const phase2Recovery = boss.cd;
       FIRE_PATCHES.length = 0;
+      boss.st = 'groundTell'; boss.t2 = G.STEP; boss.groundWaveDirZ = 1;
+      boss.z = -231; boss.yaw = Math.PI; boss.hp = 110;
+      G.events.length = 0; G.step(G.STEP);
+      const coreOpened = G.events.some((e) => e.type === 'bosscoreopen');
+      const corePoint = [boss.x, boss.y + 2.12, boss.z + 0.72];
+      const hpBeforeCore = boss.hp;
+      damageEnt(boss, 4, ...corePoint, 0);
+      const openDamage = hpBeforeCore - boss.hp;
+      GROUND_WAVES.length = 0;
+
+      // The second threshold can be reached during a Charge; it completes first.
+      boss.hp = 61; boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
+      boss.chargeDirZ = 1; boss.chargeTargetZ = boss.chargeFrontZ; boss.fireTrailDistance = 0;
+      eventStart = G.events.length;
+      damageEnt(boss, 12, ...bodyHit(), 0);
+      const pending = boss.pendingPhase === 3 && boss.st === 'charge' && !boss.damageable && boss.hp === 60;
+      damageEnt(boss, 4, ...bodyHit(), 0);
+      const pendingBlocked = boss.hp === 60 && G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked);
+      G.placeAt({ x: 4, y: 28, z: -220 }); G.p.iframes = 99;
+      const beforePendingZ = boss.z; G.step(G.STEP);
+      const pendingStep = boss.z - beforePendingZ;
+      run(0.8);
+      const second = {
+        pending, pendingBlocked, phase: boss.bossPhase,
+        event: G.events.slice(eventStart).some((e) => e.type === 'bossphase3'),
+        afterCharge: boss.st === 'phaseTransition' && !boss.damageable,
+        bars: bars(),
+      };
+      eventStart = G.events.length;
+      G.state.noEnemies = false;
+      run(Math.max(0, boss.phaseTransitionTimer - 0.15));
+      second.held = boss.st === 'phaseTransition' && !boss.damageable &&
+        !G.events.slice(eventStart).some((e) => ['bosscharge', 'bossslag', 'bossgroundslam', 'bosssteamspin'].includes(e.type));
+      damageEnt(boss, 4, ...bodyHit(), 0);
+      second.blocked = boss.hp === 60 && G.events.slice(eventStart).some((e) => e.type === 'hit' && e.blocked);
+      G.state.noEnemies = true; run(0.25);
+      second.resumed = boss.st === 'idle' && boss.damageable;
+
+      // Phase 3 speeds every attack and increases damage, including the fire.
+      boss.st = 'charge'; boss.x = 0; boss.z = -231; boss.chargeX = 0;
+      boss.chargeDirZ = 1; boss.chargeTargetZ = boss.chargeFrontZ; boss.fireTrailDistance = 0;
+      G.placeAt({ x: 0, y: 28, z: -230 }); G.p.iframes = 0; G.p.hp = 16;
+      G.state.noEnemies = false;
+      const beforeZ = boss.z; G.step(G.STEP);
+      const phase3Step = boss.z - beforeZ, chargeDamage = 16 - G.p.hp;
+      G.placeAt({ x: 4, y: 28, z: -220 }); G.p.iframes = 99; run(0.25);
+      const phase3Fire = FIRE_PATCHES.find((patch) => patch.source === 'charge');
+      G.state.noEnemies = true; run(0.5);
+      const phase3Recovery = boss.cd;
+      FIRE_PATCHES.length = 0;
+
       boss.st = 'slagTell'; boss.t2 = G.STEP; boss.z = -231; boss.yaw = Math.PI;
       G.placeAt({ x: 0, y: 28, z: -223 }); G.step(G.STEP);
       const slag = G.ESHOTS.find((s) => s.kind === 'slag');
       const slagFlight = slag ? slag.life + G.STEP - 0.15 : 0;
       G.ESHOTS.length = 0;
       boss.st = 'groundTell'; boss.t2 = G.STEP; boss.groundWaveDirZ = 1;
-      boss.z = -231; boss.yaw = Math.PI; boss.hp = 49;
-      G.events.length = 0; G.step(G.STEP);
-      const slam = G.events.some((e) => e.type === 'bossgroundslam');
-      const opened = G.events.some((e) => e.type === 'bosscoreopen');
-      const waveSpeed = GROUND_WAVES[0]?.speed ?? 0;
-      const openTime = boss.coreOpenTimer;
-      const corePoint = [boss.x, boss.y + 2.12, boss.z + 0.72];
-      const hpBeforeOpen = boss.hp;
-      damageEnt(boss, 4, ...corePoint, 0);
-      const openDamage = hpBeforeOpen - boss.hp;
-      run(G.tuning.bossCoreOpenDuration + 0.1);
-      const closed = boss.coreOpenTimer === 0;
-      const hpBeforeClosed = boss.hp;
-      damageEnt(boss, 2, ...corePoint, 0);
-      const closedDamage = hpBeforeClosed - boss.hp;
+      boss.z = -231; boss.yaw = Math.PI; G.step(G.STEP);
+      const wave = GROUND_WAVES[0];
+      const waveSpeed = wave?.speed ?? 0, waveDamage = wave?.damage ?? 0;
+      GROUND_WAVES.length = 0;
+
+      // Steam spin is a Phase 3 move with a 0.5 s tell and 3.5 m reach.
+      boss.st = 'idle'; boss.cd = 0; boss.nextAttack = 'steam'; boss.x = 0; boss.z = -231;
+      G.placeAt({ x: 4.6, y: 28, z: -231 }); G.p.iframes = 99;
+      G.state.noEnemies = false; eventStart = G.events.length; G.step(G.STEP);
+      const steamWarned = boss.st === 'steamTell' && G.events.slice(eventStart).some((e) => e.type === 'bosstelegraph' && e.attack === 'steam');
+      run(0.49); const steamTellHeld = boss.st === 'steamTell';
+      run(0.02); const steamStarted = boss.st === 'steamSpin';
+      boss.x = 0; boss.z = -231;
+      G.placeAt({ x: 3, y: 28, z: -231 }); G.p.iframes = 0; G.p.hp = 16;
+      eventStart = G.events.length; G.step(G.STEP);
+      const steamInside = { damage: 16 - G.p.hp, event: G.events.slice(eventStart).some((e) => e.type === 'bosssteamhit') };
+      boss.x = 0; boss.z = -231; boss.st = 'steamSpin'; boss.t2 = 1.5;
+      G.placeAt({ x: 4.6, y: 28, z: -231 }); G.p.iframes = 0; G.p.hp = 16;
+      eventStart = G.events.length; G.step(G.STEP);
+      const steamOutside = { damage: 16 - G.p.hp, event: G.events.slice(eventStart).some((e) => e.type === 'bosssteamhit'), slide: boss.x };
+      G.state.noEnemies = true; run(1.6);
 
       boss.hp = 1; G.events.length = 0;
       const killed = damageEnt(boss, 1, ...bodyHit(), 0);
@@ -319,36 +365,54 @@ module.exports = {
       const cleared = G.state.cleared && !G.state.timing;
       dispatchEvents();
       return {
-        tuning: { transition: G.tuning.bossPhaseTransitionTime, speed: G.tuning.bossPhase2SpeedMult,
+        tuning: { transition: G.tuning.bossPhaseTransitionTime, speed2: G.tuning.bossPhase2SpeedMult,
+          speed3: G.tuning.bossPhase3SpeedMult, damage3: G.tuning.bossPhase3DamageMult,
           charge: boss.chargeSpeed, wave: G.tuning.groundWaveSpeed, openTime: G.tuning.bossCoreOpenDuration },
-        phaseAtHalf, phaseEvent, cancelledTell, switchedBelowHalf, blocked, held, resumed,
-        chargeContinues, originalChargeStep, chargeThenTransition, chargeStep, recovery, slagFlight, waveSpeed,
-        fire: { count: trail.length, life: fireLife, damage: fireDamage, hit: fireHit },
-        core: { slam, opened, openTime, openDamage, closed, closedDamage },
+        initial, first, second, phase2Step, phase2Recovery, pendingStep, phase3Step, phase3Recovery,
+        phase2Fire: { count: trail.length, life: fireLife, damage: fireDamage, hit: fireHit },
+        core: { opened: coreOpened, damage: openDamage },
+        phase3: { chargeDamage, fireMultiplier: phase3Fire?.damageMult, slagFlight,
+          slagMultiplier: slag?.damageMult, waveSpeed, waveDamage },
+        steam: { warned: steamWarned, tellHeld: steamTellHeld, started: steamStarted, inside: steamInside, outside: steamOutside },
         defeat: { killed, explosion, cleared, mode: G.state.mode },
       };
     });
-    log('Warden phase 2 transition and defeat', phaseTwo);
-    expect(!phaseTwo.phaseAtHalf && phaseTwo.phaseEvent && phaseTwo.cancelledTell && phaseTwo.switchedBelowHalf,
-      'Phase 2 should cancel a tell and enter its invulnerable transition below, not at, 50% HP');
-    expect(phaseTwo.tuning.transition === 2 && phaseTwo.blocked && phaseTwo.held && phaseTwo.resumed,
-      'the 2 s transition should ping blocked shots and pause attacks until it finishes');
-    expect(phaseTwo.chargeContinues && phaseTwo.chargeThenTransition &&
-      Math.abs(phaseTwo.originalChargeStep - phaseTwo.tuning.charge / 120) < 0.01,
-      'an active Charge should finish at its original speed before the Phase 2 transition');
-    expect(phaseTwo.tuning.speed === 1.33 && phaseTwo.tuning.openTime === 2.5 &&
-      Math.abs(phaseTwo.chargeStep - phaseTwo.tuning.charge * phaseTwo.tuning.speed / 120) < 0.01 &&
-      Math.abs(phaseTwo.recovery - 1 / phaseTwo.tuning.speed) < 0.02 &&
-      Math.abs(phaseTwo.slagFlight - 0.8 / phaseTwo.tuning.speed) < 0.02 &&
-      Math.abs(phaseTwo.waveSpeed - phaseTwo.tuning.wave * phaseTwo.tuning.speed) < 0.01,
-      'one Phase 2 slider should scale Charge, Slag flight, Ground wave and recovery');
-    expect(phaseTwo.fire.count >= 4 && phaseTwo.fire.life > 2 && phaseTwo.fire.damage === 2 && phaseTwo.fire.hit,
-      'Phase 2 Charge should leave three-second fire that deals the tuned fire damage on touch');
-    expect(phaseTwo.core.slam && phaseTwo.core.opened && phaseTwo.core.openTime === 2.5 &&
-      phaseTwo.core.openDamage === 8 && phaseTwo.core.closed && phaseTwo.core.closedDamage === 3,
-      'Ground Pound should open the core for 2x damage, then return to the normal 1.5x weak spot');
-    expect(phaseTwo.defeat.killed && phaseTwo.defeat.explosion && phaseTwo.defeat.cleared && phaseTwo.defeat.mode === 'win',
-      'defeating the Warden should emit its explosion and end the fight');
+    log('Warden three phases and defeat', phases);
+    expect(phases.initial.hp === 180 && phases.initial.max === 180 && phases.initial.perBar === 60 &&
+      JSON.stringify(phases.initial.bars.values) === JSON.stringify([100, 100, 100]) && phases.initial.bars.active === 1,
+      'the Warden should start with three full 60 HP bars');
+    expect(phases.first.hp === 120 && phases.first.phase === 2 && phases.first.event && phases.first.cancelledTell &&
+      phases.first.blocked && phases.first.held && phases.first.resumed && phases.first.bars.active === 2 &&
+      JSON.stringify(phases.first.bars.values) === JSON.stringify([0, 100, 100]),
+      'emptying Phase 1 should cancel its tell, block shots and attacks for 3 s, then resume in Phase 2');
+    expect(phases.tuning.transition === 3 && phases.tuning.speed2 === 1.33 &&
+      Math.abs(phases.phase2Step - phases.tuning.charge * phases.tuning.speed2 / 120) < 0.01 &&
+      Math.abs(phases.phase2Recovery - 1 / phases.tuning.speed2) < 0.02 &&
+      phases.phase2Fire.count >= 4 && phases.phase2Fire.life > 2 && phases.phase2Fire.damage === 2 &&
+      phases.phase2Fire.hit && phases.core.opened && phases.core.damage === 8,
+      'Phase 2 should keep its faster Charge, fire trail and double-damage open core');
+    expect(phases.second.pending && phases.second.pendingBlocked && phases.second.phase === 3 &&
+      phases.second.event && phases.second.afterCharge && phases.second.held && phases.second.blocked &&
+      phases.second.resumed && phases.second.bars.active === 3 &&
+      JSON.stringify(phases.second.bars.values) === JSON.stringify([0, 0, 100]) &&
+      Math.abs(phases.pendingStep - phases.tuning.charge * phases.tuning.speed2 / 120) < 0.01,
+      'emptying Phase 2 during a Charge should finish that Charge, then block shots and attacks through the Phase 3 power-up');
+    expect(phases.tuning.speed3 === 1.6 && phases.tuning.damage3 === 1.5 &&
+      Math.abs(phases.phase3Step - phases.tuning.charge * phases.tuning.speed3 / 120) < 0.01 &&
+      Math.abs(phases.phase3Recovery - 1 / phases.tuning.speed3) < 0.02 &&
+      phases.phase3.chargeDamage === 6 && phases.phase3.fireMultiplier === 1.5 &&
+      Math.abs(phases.phase3.slagFlight - 0.8 / phases.tuning.speed3) < 0.02 &&
+      phases.phase3.slagMultiplier === 1.5 &&
+      Math.abs(phases.phase3.waveSpeed - phases.tuning.wave * phases.tuning.speed3) < 0.01 &&
+      phases.phase3.waveDamage === 4.5,
+      'Phase 3 should scale movement, Charge, Slag, wave, recovery and attack damage');
+    expect(phases.steam.warned && phases.steam.tellHeld && phases.steam.started &&
+      phases.steam.inside.damage === 4.5 && phases.steam.inside.event &&
+      phases.steam.outside.damage === 0 && !phases.steam.outside.event &&
+      Math.abs(phases.steam.outside.slide - 4 / 120) < 0.01,
+      'Steam spin should hold its 0.5 s tell, slide at 4 m/s, hurt inside the ring and spare a player outside it');
+    expect(phases.defeat.killed && phases.defeat.explosion && phases.defeat.cleared && phases.defeat.mode === 'win',
+      'defeating the Warden in Phase 3 should still explode and show the win screen');
     await page.waitForFunction(() => !document.getElementById('ov-win').hidden, null, { timeout: 3000 });
     const win = await page.evaluate(() => ({
       title: document.getElementById('win-title').textContent,
@@ -376,6 +440,7 @@ module.exports = {
       const defeat = (time) => {
         const boss = G.ENTS.find((e) => e.kind === 'boss');
         boss.activated = boss.alive = boss.damageable = boss.combatReady = true;
+        boss.bossPhase = 3; boss.phaseTwo = boss.phaseThree = true; boss.pendingPhase = 0;
         boss.hp = 1; G.state.time = time; G.state.timing = true;
         damageEnt(boss, 1, boss.x, boss.y + 0.5, boss.z + boss.hz, 0);
         dispatchEvents();

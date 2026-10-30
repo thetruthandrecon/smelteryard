@@ -16,8 +16,11 @@ defineTuning('Enemies', [
   ['slagFireDamage', 'Slag fire damage', 2, 0, 10, 0.5, 'HP'],
   ['groundWaveDamage', 'Ground wave damage', 3, 0, 10, 0.5, 'HP'],
   ['groundWaveSpeed', 'Ground wave speed', 12, 5, 22, 0.5, 'm/s'],
-  ['bossPhaseTransitionTime', 'Phase 2 transition', 2, 0.5, 4, 0.1, 's'],
+  ['bossHpPerBar', 'HP per bar', 60, 20, 120, 1, 'HP'],
+  ['bossPhaseTransitionTime', 'Power-up duration', 3, 1, 6, 0.1, 's'],
   ['bossPhase2SpeedMult', 'Phase 2 speed', 1.33, 1, 2, 0.01, '×'],
+  ['bossPhase3SpeedMult', 'Phase 3 speed', 1.6, 1, 2.5, 0.01, '×'],
+  ['bossPhase3DamageMult', 'Phase 3 damage', 1.5, 1, 3, 0.05, '×'],
   ['bossCoreOpenDuration', 'Core open time', 2.5, 0.5, 6, 0.1, 's'],
 ]);
 
@@ -28,7 +31,7 @@ export const ENT_SPEC = {
   turret: { hx: 0.5, hy: 1.2, hz: 0.5, hp: 8, respawn: 10 },
   walker: { hx: 0.55, hy: 1.15, hz: 0.55, hp: 3, respawn: 6, touch: 3 },
   flyer: { hx: 0.45, hy: 0.8, hz: 0.45, hp: 2, respawn: 6, touch: 2 },
-  boss: { hx: 1.45, hy: 3.9, hz: 1.1, hp: 100, respawn: 999999, touch: 3, chargeDamage: 4, chargeSpeed: 18, chargeAlignSpeed: 14 },
+  boss: { hx: 1.45, hy: 3.9, hz: 1.1, hp: 180, respawn: 999999, touch: 3, chargeDamage: 4, chargeSpeed: 18, chargeAlignSpeed: 14 },
 };
 // place an enemy in the current level (called from level definitions)
 export function addEnt(kind, x, y, z, extra = {}) {
@@ -51,6 +54,7 @@ const GROUND_WAVE_DEPTH = 0.42;
 const GROUND_WAVE_MIN_X = -5, GROUND_WAVE_MAX_X = 5;
 const GROUND_WAVE_FRONT_Z = -216, GROUND_WAVE_BACK_Z = -245;
 const BOSS_FIRE_SPACING = 1.2, BOSS_FIRE_RADIUS = 0.72;
+const STEAM_SPIN_TIME = 1.5, STEAM_SPIN_RADIUS = 3.5, STEAM_SPIN_BASE_SPEED = 2.5, STEAM_SPIN_DAMAGE = 3;
 
 function isBossCoreHit(e, x, y, z, level) {
   const radius = BOSS_CORE.radius + (SHOT_RADII[level] ?? 0);
@@ -65,7 +69,8 @@ export function resetEnt(e) {
     e.activated = false; e.damageable = false; e.combatReady = false;
     e.introTimer = 0; e.introProgress = 0; e.phase = 0; e.introEntering = false;
     e.chargeDirZ = 0; e.chargeTargetZ = e.entryZ; e.chargeX = e.x0;
-    e.groundWaveDirZ = 0; e.phaseTwo = false; e.phaseTwoPending = false;
+    e.groundWaveDirZ = 0; e.bossPhase = 1; e.phaseTwo = false; e.phaseThree = false; e.pendingPhase = 0;
+    e.hpPerBar = tuning.bossHpPerBar; e.maxHp = e.hpPerBar * 3; e.hp = e.maxHp;
     e.phaseTransitionTimer = 0; e.phaseTransitionElapsed = 0;
     e.coreOpenTimer = 0; e.fireTrailDistance = 0;
     e.nextAttack = 'charge';
@@ -82,10 +87,11 @@ export function activateBoss() {
   const boss = ENTS.find((e) => e.kind === 'boss');
   if (!boss || boss.activated) return false;
   boss.alive = true; boss.activated = true; boss.damageable = false;
-  boss.hp = boss.maxHp; boss.introTimer = 0; boss.introProgress = 0;
+  boss.hpPerBar = tuning.bossHpPerBar; boss.maxHp = boss.hpPerBar * 3; boss.hp = boss.maxHp;
+  boss.introTimer = 0; boss.introProgress = 0;
   boss.combatReady = false; boss.introEntering = false; boss.chargeDirZ = 0;
   boss.chargeTargetZ = boss.entryZ; boss.chargeX = boss.x0; boss.cd = 0;
-  boss.nextAttack = 'charge'; boss.phaseTwo = false; boss.phaseTwoPending = false;
+  boss.nextAttack = 'charge'; boss.bossPhase = 1; boss.phaseTwo = false; boss.phaseThree = false; boss.pendingPhase = 0;
   boss.phaseTransitionTimer = 0; boss.phaseTransitionElapsed = 0;
   boss.coreOpenTimer = 0; boss.fireTrailDistance = 0;
   boss.st = 'enter'; boss.z = boss.z0; boss.yaw = Math.PI;
@@ -105,24 +111,26 @@ function resetBossEncounter(e) {
   }
 }
 
-function bossSpeed(e) { return e.phaseTwo ? tuning.bossPhase2SpeedMult : 1; }
+function bossSpeed(e) { return e.bossPhase === 3 ? tuning.bossPhase3SpeedMult : e.bossPhase === 2 ? tuning.bossPhase2SpeedMult : 1; }
+function bossDamage(e) { return e.bossPhase === 3 ? tuning.bossPhase3DamageMult : 1; }
 function bossRecovery(e) { return 1 / bossSpeed(e); }
 
 function startBossPhaseTransition(e) {
-  e.phaseTwoPending = false; e.phaseTwo = true; e.damageable = false;
+  e.bossPhase = e.pendingPhase; e.pendingPhase = 0;
+  e.phaseTwo = e.bossPhase >= 2; e.phaseThree = e.bossPhase === 3; e.damageable = false;
   e.st = 'phaseTransition'; e.t2 = 0; e.tele = 0; e.introEntering = false;
   e.phaseTransitionTimer = tuning.bossPhaseTransitionTime;
   e.phaseTransitionElapsed = 0; e.coreOpenTimer = 0;
   // Leave a clear arena while the Warden powers up.
   for (let i = ESHOTS.length - 1; i >= 0; i--) if (ESHOTS[i].kind === 'slag') ESHOTS.splice(i, 1);
   FIRE_PATCHES.length = 0; GROUND_WAVES.length = 0;
-  events.push({ type: 'bossphase2', e, x: e.x, y: e.y + 2.1, z: e.z });
+  events.push({ type: e.phaseThree ? 'bossphase3' : 'bossphase2', e, x: e.x, y: e.y + 2.1, z: e.z });
 }
 
 function leaveBossChargeFire(e, fromZ) {
   const distance = Math.abs(e.z - fromZ), dirZ = Math.sign(e.z - fromZ);
   for (let d = BOSS_FIRE_SPACING - e.fireTrailDistance; d <= distance; d += BOSS_FIRE_SPACING) {
-    FIRE_PATCHES.push({ x: e.x, y: e.y + 0.04, z: fromZ + dirZ * d, life: SLAG_PATCH_LIFE, radius: BOSS_FIRE_RADIUS, source: 'charge' });
+    FIRE_PATCHES.push({ x: e.x, y: e.y + 0.04, z: fromZ + dirZ * d, life: SLAG_PATCH_LIFE, radius: BOSS_FIRE_RADIUS, source: 'charge', damageMult: bossDamage(e) });
   }
   e.fireTrailDistance = (e.fireTrailDistance + distance) % BOSS_FIRE_SPACING;
 }
@@ -147,9 +155,15 @@ function startBossGroundTell(e) {
   events.push({ type: 'bosstelegraph', e, attack: 'groundpound' });
 }
 
+function startBossSteamTell(e) {
+  e.st = 'steamTell'; e.t2 = 0.5; e.tele = 1;
+  events.push({ type: 'bosstelegraph', e, attack: 'steam' });
+}
+
 function startBossNextTell(e) {
   if (e.nextAttack === 'slag') startBossSlagTell(e);
   else if (e.nextAttack === 'groundpound') startBossGroundTell(e);
+  else if (e.nextAttack === 'steam' && e.bossPhase === 3) startBossSteamTell(e);
   else startBossChargeTell(e);
 }
 
@@ -168,7 +182,7 @@ function launchBossSlag(e) {
       kind: 'slag', x: startX, y: startY, z: startZ,
       vx: (targetX - startX) / flight, vy, vz: (targetZ - startZ) / flight,
       life: flight + 0.15, radius: SLAG_RADIUS, gravity: SLAG_GRAVITY,
-      targetX, targetY, targetZ,
+      targetX, targetY, targetZ, damageMult: bossDamage(e),
     });
   }
   events.push({ type: 'bossslag', e, x: startX, y: startY, z: startZ });
@@ -182,29 +196,33 @@ function launchBossGroundWave(e) {
   GROUND_WAVES.push({
     x: (GROUND_WAVE_MIN_X + GROUND_WAVE_MAX_X) * 0.5, y: e.y, z: e.z,
     width: GROUND_WAVE_MAX_X - GROUND_WAVE_MIN_X, dirZ, endZ, speed,
-    damage: tuning.groundWaveDamage, depth: GROUND_WAVE_DEPTH,
+    damage: tuning.groundWaveDamage * bossDamage(e), depth: GROUND_WAVE_DEPTH,
     life: Math.abs(endZ - e.z) / speed + 0.1, crossed: false,
   });
   events.push({ type: 'bossgroundslam', e, x: e.x, y: e.y, z: e.z, dirZ });
   e.coreOpenTimer = tuning.bossCoreOpenDuration;
   events.push({ type: 'bosscoreopen', e, x: e.x, y: e.y + BOSS_CORE.y, z: e.z + BOSS_CORE.z * Math.cos(e.yaw) });
-  e.nextAttack = 'charge'; e.st = 'groundRecover'; e.t2 = 0.25; e.tele = 0;
+  e.nextAttack = e.bossPhase === 3 ? 'steam' : 'charge'; e.st = 'groundRecover'; e.t2 = 0.25; e.tele = 0;
 }
 
 function updateBoss(e, dt, attack) {
+  if (e.hpPerBar !== tuning.bossHpPerBar) {
+    e.hp = e.hp / e.hpPerBar * tuning.bossHpPerBar;
+    e.hpPerBar = tuning.bossHpPerBar; e.maxHp = e.hpPerBar * 3;
+  }
   if (p.dead > 0) {
     resetBossEncounter(e);
     return;
   }
 
-  if (e.phaseTwoPending && e.st !== 'charge') startBossPhaseTransition(e);
+  if (e.pendingPhase && e.st !== 'charge') startBossPhaseTransition(e);
   if (e.st === 'phaseTransition') {
     e.phaseTransitionElapsed += dt;
     e.phaseTransitionTimer = Math.max(0, e.phaseTransitionTimer - dt);
     e.phase += dt * 6;
     if (e.phaseTransitionTimer <= 0) {
       e.st = 'idle'; e.damageable = true; e.cd = 0;
-      events.push({ type: 'bossphase2ready', e });
+      events.push({ type: e.phaseThree ? 'bossphase3ready' : 'bossphase2ready', e });
     }
     return;
   }
@@ -255,6 +273,29 @@ function updateBoss(e, dt, attack) {
     }
     e.t2 = Math.max(0, e.t2 - dt);
     if (e.t2 <= 0 && !e.introEntering) launchBossSlag(e);
+  } else if (e.st === 'steamTell') {
+    e.t2 = Math.max(0, e.t2 - dt);
+    if (e.t2 <= 0) {
+      e.st = 'steamSpin'; e.t2 = STEAM_SPIN_TIME; e.tele = 0;
+      events.push({ type: 'bosssteamspin', e, x: e.x, y: e.y + 1.2, z: e.z });
+    }
+  } else if (e.st === 'steamSpin') {
+    const dx = p.x - e.x, dz = p.z - e.z, distance = Math.hypot(dx, dz);
+    const slide = Math.min(distance, STEAM_SPIN_BASE_SPEED * bossSpeed(e) * dt);
+    if (distance > 0) {
+      e.x = Math.max(e.chargeMinX, Math.min(e.chargeMaxX, e.x + dx / distance * slide));
+      e.z = Math.max(e.chargeBackZ, Math.min(e.chargeFrontZ, e.z + dz / distance * slide));
+    }
+    e.yaw += dt * 14 * bossSpeed(e);
+    if (attack && p.y < e.y + 2.4 && p.y + H > e.y &&
+      Math.hypot(p.x - e.x, p.z - e.z) <= STEAM_SPIN_RADIUS + R) {
+      if (hurt(STEAM_SPIN_DAMAGE * bossDamage(e) * tuning.damageTaken, p.x - e.x, p.z - e.z)) {
+        events.push({ type: 'bosssteamhit', x: p.x, y: p.y + 1, z: p.z });
+        if (p.dead > 0) { resetBossEncounter(e); return; }
+      }
+    }
+    e.t2 = Math.max(0, e.t2 - dt);
+    if (e.t2 <= 0) { e.st = 'idle'; e.cd = bossRecovery(e); e.nextAttack = 'charge'; }
   } else if (e.st === 'groundTell') {
     e.t2 = Math.max(0, e.t2 - dt);
     if (e.t2 <= 0) launchBossGroundWave(e);
@@ -272,7 +313,7 @@ function updateBoss(e, dt, attack) {
       e.nextAttack = 'slag';
     } else e.z += Math.sign(dz) * move;
     if (e.phaseTwo) leaveBossChargeFire(e, fromZ);
-    if (e.phaseTwoPending && e.st !== 'charge') { startBossPhaseTransition(e); return; }
+    if (e.pendingPhase && e.st !== 'charge') { startBossPhaseTransition(e); return; }
   } else if (e.st === 'idle' && e.combatReady && attack) {
     e.cd -= dt;
     if (e.cd <= 0) startBossNextTell(e);
@@ -282,7 +323,7 @@ function updateBoss(e, dt, attack) {
     const mn = entMin(e), mx = entMax(e);
     if (p.x - R < mx[0] && p.x + R > mn[0] && p.y < mx[1] && p.y + H > mn[1] && p.z - R < mx[2] && p.z + R > mn[2]) {
       const charging = e.st === 'charge';
-      if (hurt((charging ? e.chargeDamage : e.touch) * tuning.damageTaken, p.x - e.x, p.z - e.z)) {
+      if (hurt((charging ? e.chargeDamage : e.touch) * bossDamage(e) * tuning.damageTaken, p.x - e.x, p.z - e.z)) {
         const x = (p.x + e.x) / 2, y = p.y + 1, z = (p.z + e.z) / 2;
         events.push({ type: 'touch', x, y, z, boss: true, charge: charging });
         if (charging) events.push({ type: 'bossimpact', x, y, z });
@@ -302,11 +343,16 @@ export function damageEnt(e, dmg, x, y, z, level) {
   const weakspot = e.kind === 'boss' && isBossCoreHit(e, x, y, z, level);
   const coreOpen = weakspot && e.coreOpenTimer > 0;
   const damage = weakspot ? dmg * (coreOpen ? 2 : 1.5) : dmg;
-  e.hp = Math.max(0, e.hp - damage); e.flash = 0.12;
-  const kill = e.hp <= 0;
+  const threshold = e.kind === 'boss' && e.bossPhase < 3 ? (3 - e.bossPhase) * e.hpPerBar : 0;
+  const nextHp = Math.max(0, e.hp - damage);
+  const crossedBar = e.kind === 'boss' && !e.pendingPhase && e.bossPhase < 3 && nextHp <= threshold;
+  e.hp = crossedBar && e.hp > threshold ? threshold : nextHp;
+  e.flash = 0.12;
+  const kill = e.hp <= 0 && !crossedBar;
   events.push({ type: 'hit', x, y, z, kill, level, weakspot, coreOpen, damage });
-  if (e.kind === 'boss' && !kill && !e.phaseTwo && !e.phaseTwoPending && e.hp < e.maxHp * 0.5) {
-    e.phaseTwoPending = true;
+  if (crossedBar) {
+    e.pendingPhase = e.bossPhase + 1;
+    e.damageable = false;
     if (e.st !== 'charge') startBossPhaseTransition(e);
   }
   if (kill) {
@@ -409,7 +455,7 @@ export function updateEnemies(dt) {
     if (fire.life <= 0) { FIRE_PATCHES.splice(i, 1); continue; }
     const dx = p.x - fire.x, dz = p.z - fire.z;
     if (attack && p.y <= fire.y + 0.1 && p.y + H > fire.y - 0.1 && Math.hypot(dx, dz) <= fire.radius + R) {
-      if (hurt(tuning.slagFireDamage * tuning.damageTaken, dx, dz)) events.push({ type: fire.source === 'charge' ? 'bossfirehit' : 'slagfirehit', x: p.x, y: fire.y, z: p.z });
+      if (hurt(tuning.slagFireDamage * (fire.damageMult ?? 1) * tuning.damageTaken, dx, dz)) events.push({ type: fire.source === 'charge' ? 'bossfirehit' : 'slagfirehit', x: p.x, y: fire.y, z: p.z });
     }
   }
   for (let i = GROUND_WAVES.length - 1; i >= 0; i--) {
@@ -443,7 +489,7 @@ export function updateEnemies(dt) {
       if (t <= 1 && t < tWall) {
         const x = s.x + dx * t, y = s.y + dy * t, z = s.z + dz * t;
         if (s.kind === 'slag') {
-          hurt(tuning.slagBlobDamage * tuning.damageTaken, s.vx, s.vz);
+          hurt(tuning.slagBlobDamage * (s.damageMult ?? 1) * tuning.damageTaken, s.vx, s.vz);
           events.push({ type: 'slagblobhit', x, y, z });
         } else {
           hurt(2 * tuning.damageTaken, s.vx, s.vz);
@@ -456,7 +502,7 @@ export function updateEnemies(dt) {
       const x = s.x + dx * tWall, y = s.y + dy * tWall, z = s.z + dz * tWall;
       const floorY = s.kind === 'slag' ? groundBelow(x, y + radius + 0.1, z) : -Infinity;
       if (s.kind === 'slag' && dy < 0 && Number.isFinite(floorY) && y <= floorY + radius + 0.06) {
-        FIRE_PATCHES.push({ x, y: floorY + 0.04, z, life: SLAG_PATCH_LIFE, radius: SLAG_PATCH_RADIUS });
+        FIRE_PATCHES.push({ x, y: floorY + 0.04, z, life: SLAG_PATCH_LIFE, radius: SLAG_PATCH_RADIUS, damageMult: s.damageMult });
         events.push({ type: 'slagland', x, y: floorY + 0.04, z });
       } else events.push({ type: 'eshotwall', x, y, z });
       ESHOTS.splice(i, 1); continue;
