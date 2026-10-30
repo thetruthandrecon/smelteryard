@@ -15,6 +15,7 @@ An original over-the-shoulder 3D action platformer in the spirit of Mega Man X5:
 - **Publishing.** `.github/workflows/publish.yml` publishes `main` to GitHub Pages on every merge, using `tools/build-site.cjs`.
   - Each version goes in its own folder, `v/<commit>/`, and the published `index.html` reloads itself once if a newer version exists, so a normal refresh always shows the latest.
   - The publisher rewrites two lines of `index.html`: the stylesheet link `href="src/ui/style.css"` and the script line `<script type="module" src="src/main.js"></script>`. Keep both exactly as they are; the Playtest check fails if it can't find them.
+  - The import map line just above the script line (`<script type="importmap">`) tells Three.js's model loaders where Three.js is. Keep it, and keep it above the script line.
 
 ## Folder map and lanes
 Each lane is a set of files that only its owner edits.
@@ -27,7 +28,7 @@ Each lane is a set of files that only its owner edits.
 | `src/levels/` | level building blocks (`builders.js`), the levels (`smelter.js`, `test-yard.js`, `index.js`), platforms and crushers (`hazards.js`), checkpoints, goal, lava, capsules (`course.js`), level looks (`visuals.js`) | Codex |
 | `src/ui/`, `index.html` markup | HUD, menus, pause, clear and game-over screens, tuning panel, styles | Codex |
 | `src/fx/` | particles (`particles.js`), sound building blocks (`audio.js`) | Codex |
-| `src/core/`, `src/main.js`, the `<script>` line and stylesheet link in `index.html`, `tests/run.cjs`, `tools/`, `package.json`, `.github/`, this file, `CLAUDE.md`, `README.md` | shared: Three.js import, helpers, tuning registry, world state and events, the step order, rendering setup, entry point, test runner, build and CI | Nobody without H's approval in chat |
+| `src/core/`, `src/main.js`, the `<script>` lines and stylesheet link in `index.html`, `tests/run.cjs`, `tools/`, `package.json`, `.github/`, this file, `CLAUDE.md`, `README.md` | shared: Three.js import, helpers, tuning registry, world state and events, the step order, rendering setup, model loader (`models.js`), entry point, test runner, build and CI | Nobody without H's approval in chat |
 | `tests/suites/` | one test file per lane: `10-combat` and `20-player` and `90-input` (Claude); `30-enemies`, `40-levels`, `50-courses`, `80-screens`, `95-layout` (Codex) | per the suite's `owner` |
 | `TASKS.md` | the live board | each AI edits only its own section and its own request lines |
 
@@ -58,15 +59,22 @@ If your task needs a change in the other lane, don't edit it. Write the request 
 - **Levels.** A level is a function that calls the helpers in `src/levels/builders.js`; register it in `src/levels/index.js`. Stages run toward −Z and Y is up. Smelter Yard spans z ≈ 12 to −216, with floor heights 0, 1.6, 10.4, 25 and 28.
 - **Module rules.**
   - Import Three.js only as `import * as THREE from '../core/three.js'`.
-  - Lanes import each other freely, so imports form cycles. **Top-level code must never call a function from another lane, and must never read another lane's values.** Use them inside functions only. Core modules (`three`, `util`, `tuning`, `world`, `render`) import no lanes.
+  - Lanes import each other freely, so imports form cycles. **Top-level code must never call a function from another lane, and must never read another lane's values.** Use them inside functions only. Core modules (`three`, `util`, `tuning`, `world`, `render`, `models`) import no lanes.
   - Wrap all `localStorage` access in the `store` helper.
   - The only external sources allowed are Three.js from jsdelivr (exact version, including its loaders) and Google Fonts. 3D models come from model files (see "3D models" below); everything else is drawn in code: textures on canvases, sound with WebAudio. No new dependencies without H's approval.
 - **Test hook.** `window.__game` in `src/main.js` exposes state for the tests. Keep its fields.
 
 ## 3D models (H approved on 2026-10-30)
-- **Files:** `assets/models/<name>.glb`, one per character or prop, textures packed inside. Aim for at most 30,000 triangles, 5 MB and 2048 px textures per model, so the game stays smooth in a browser.
-- **Where they come from:** H makes them. An image generator draws a character sheet from the prompts in `assets/models/PROMPTS.md`, an image-to-3D tool (for example Meshy or Tripo) turns it into a model, and Mixamo adds a skeleton and animations. Only tools whose terms allow using the result in the game. Every design is our own: the classic action-platformer robot heroes are the inspiration, never something to copy.
-- **Loading:** with the GLTFLoader from jsdelivr at the exact Three.js version, through one shared helper in `src/core/` (added with the first model, H approved). Load inside functions, never at the top level. Resolve file paths from the code's own folder (`new URL('../../assets/models/hero.glb', import.meta.url)`), so they work both locally and in the published `v/<commit>/` folder, which `tools/build-site.cjs` fills with `assets/` too.
+- **Files:** `assets/models/<name>.glb`, one per character or prop, textures packed inside. At most 30,000 triangles, 5 MB and 2048 px textures per model, so the game stays smooth in a browser.
+- **Where they come from:** H makes them. An image generator draws a character sheet from the prompts in `assets/models/PROMPTS.md`, an image-to-3D tool (for example Meshy or Tripo) turns it into a model, and Mixamo adds a skeleton and animations. Raw files from those tools are far over budget (often 50 to 90 MB), so H sends them to Claude, who shrinks them before they go into `assets/models/`. Only tools whose terms allow using the result in the game. Every design is our own: the classic action-platformer robot heroes are the inspiration, never something to copy.
+- **Loading:** only through `src/core/models.js`, inside functions, never at the top level:
+  ```js
+  if (modelsEnabled()) loadModel('flyer').then(({ scene, animations }) => { /* swap the look */ }).catch(() => {});
+  ```
+  - `loadModel(name)` loads `assets/models/<name>.glb` with Three.js's GLTFLoader from jsdelivr (exact version) and gives every call its own copy, skeleton included. Copies share geometry and materials, so clone a material before tinting one copy.
+  - It adds shadows and a code-built reflection map to the model's materials, so metal shows its colour instead of going dark. The code-built looks don't get it.
+  - `modelsEnabled()` is false when a test bot drives the browser, so the tests see the code-built looks. Paths resolve from the code's own folder, so they work locally and in the published `v/<commit>/` folder (`tools/build-site.cjs` copies `assets/` there).
+  - `tests/suites/20-player.cjs` loads every file in `assets/models/` and fails if one doesn't load or breaks the budget above.
 - **Models are looks only:** hitboxes, physics, timing and every gameplay rule stay in code and never depend on a model. Keep the code-built look as the fallback while a model loads, if it fails to load, and in the tests.
 - **Animation** plays while rendering (an AnimationMixer driven from the render hooks), never inside the simulation step, so the game stays deterministic.
 - **Lanes:** the hero's model and animations are Claude's; enemies, the boss, props and the level are Codex's.

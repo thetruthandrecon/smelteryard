@@ -46,6 +46,13 @@ const SUITES = fs.readdirSync(path.join(__dirname, 'suites')).filter((f) => f.en
     const url = route.request().url();
     if (url.startsWith('http://game.local/')) return serveRepo(route, url);
     if (url.includes('three@0.169.0/build/three.module.min.js')) return route.fulfill({ status: 200, contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body: three });
+    // Three.js's model loaders (src/core/models.js), from node_modules/three/examples/jsm
+    const jsm = url.split('three@0.169.0/examples/jsm/')[1];
+    if (jsm) {
+      const dir = path.resolve(path.dirname(threePath), '..', 'examples', 'jsm'), file = path.resolve(dir, jsm.split('?')[0]);
+      if (!file.startsWith(dir + path.sep) || !fs.existsSync(file)) return route.fulfill({ status: 404, body: 'not found' });
+      return route.fulfill({ status: 200, contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body: fs.readFileSync(file) });
+    }
     return route.abort(); // fonts and anything else external: not needed for the test
   });
   await page.goto('http://game.local/index.html');
