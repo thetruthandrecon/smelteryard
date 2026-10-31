@@ -10,6 +10,8 @@ import { p } from './player.js';
 import { shake, resetView } from './camera.js';
 import { emit, burst, C_TEAL, C_MOLTEN, C_DUST, C_WHITE, C_RED, C_AMBER } from '../fx/particles.js';
 import { tone, hiss, setHum, stopHum, audioTime } from '../fx/audio.js';
+import { modelsEnabled, loadModel } from '../core/models.js';
+import { aimRay, hitStopRemaining } from '../combat/shots.js';
 
 // The hero: teal armor with white plating, an orange visor band, a swept crest, a teal chest core and
 // back thrusters; jointed knees and elbows; the right forearm is the arm cannon. About 1.85 m tall,
@@ -124,9 +126,225 @@ for (let i = 0; i < 10; i++) {
 let ghostNext = 0, ghostTimer = 0;
 function spawnGhost() {
   const gh = ghosts[ghostNext++ % ghosts.length];
+  if (gh.glb && heroGlb.wrap) {
+    // the 3D model hero's afterimage: its own copy of the model, frozen in the live pose
+    const G = gh.glb;
+    G.root.position.copy(hero.group.position); G.root.rotation.copy(hero.group.rotation);
+    G.wrap.rotation.copy(heroGlb.wrap.rotation); G.wrap.scale.copy(heroGlb.wrap.scale);
+    for (let i = 0; i < G.nodes.length; i++) { const s = heroGlb.nodes[i], d = G.nodes[i]; d.position.copy(s.position); d.quaternion.copy(s.quaternion); d.scale.copy(s.scale); }
+    G.root.visible = true; gh.life = 0.26;
+    return;
+  }
   for (let i = 0; i < srcNodes.length; i++) { const s = srcNodes[i], d = gh.nodes[i]; d.position.copy(s.position); d.rotation.copy(s.rotation); d.scale.copy(s.scale); }
   gh.g.visible = true; gh.life = 0.26;
 }
+
+// The 3D model hero (assets/models/hero.glb): H's design, rigged and animated in Mixamo, with clips
+// idle, run, jump (takeoff to peak), land and fall. Once it has loaded it replaces the code-built body;
+// the code-built hero stays as the fallback and is what the tests see (models are off for test bots).
+// Looks only: the collision capsule, movement and timing never read it.
+const HERO_HEIGHT = 2.0; // m, crest included, like the code-built hero
+const BONE = (n) => 'mixamorig' + n;
+export const heroGlb = { wrap: null, model: null, skinned: null, soles: [], mixer: null, actions: {}, clip: '', nodes: [], bones: {}, muzzle: null, glow: null, aimW: 0, reachW: 0, lean: 0, landT: 0, requested: false };
+
+function requestHeroGlb() {
+  heroGlb.requested = true;
+  if (!modelsEnabled()) return;
+  Promise.all(Array.from({ length: 1 + ghosts.length }, () => loadModel('hero')))
+    .then(([main, ...copies]) => attachHeroGlb(main, copies))
+    .catch(() => { /* keep the code-built hero */ });
+}
+
+// swap the model in (also used by the player tests, which load it themselves)
+export function attachHeroGlb({ scene: model, animations }, ghostCopies = []) {
+  if (heroGlb.wrap) detachHeroGlb();
+  const H = heroGlb;
+  // the file faces +z; the game's hero faces -z
+  model.rotation.y = Math.PI;
+  const wrap = new THREE.Group();
+  wrap.add(model);
+  hero.group.add(wrap);
+  let skinned = null;
+  // no cast shadow: the blob under the hero stays its shadow, as before
+  model.traverse((o) => { if (o.isMesh) o.castShadow = false; if (o.isSkinnedMesh) { skinned = o; o.frustumCulled = false; } });
+  H.wrap = wrap; H.model = model;
+  H.nodes = []; model.traverse((o) => H.nodes.push(o));
+  for (const n of ['Hips', 'Spine1', 'RightArm', 'RightForeArm', 'RightHand', 'RightHandIndex1', 'LeftArm', 'LeftForeArm', 'LeftHand', 'LeftHandIndex1']) H.bones[n] = model.getObjectByName(BONE(n));
+  H.mixer = new THREE.AnimationMixer(model);
+  H.actions = {};
+  for (const clip of animations) {
+    const a = H.mixer.clipAction(clip);
+    if (clip.name === 'jump' || clip.name === 'land') { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
+    H.actions[clip.name] = a;
+  }
+  H.clip = '';
+  setClip('idle', 0);
+  H.mixer.update(0);
+  // size and stand it from the first idle frame (the skeleton's resting pose has the hips on the floor)
+  const pose = () => { hero.group.updateMatrixWorld(true); if (skinned) skinned.skeleton.update(); };
+  pose();
+  const box = new THREE.Box3().setFromObject(model, true);
+  wrap.scale.setScalar(HERO_HEIGHT / Math.max(0.1, box.max.y - box.min.y));
+  model.position.y = hero.group.position.y - box.min.y; // feet on the floor (in the model's own units)
+  pose();
+  // the boot soles: skin near the floor that moves with the feet, checked each frame so a boot never sinks in
+  // (per boot: its lowest points and its toe, heel and side edges, about 50 points, so the check stays cheap)
+  H.skinned = skinned; H.soles = [];
+  if (skinned) {
+    const geo = skinned.geometry, sIdx = geo.attributes.skinIndex, sW = geo.attributes.skinWeight, v = new THREE.Vector3(), floor = hero.group.position.y;
+    for (const side of ['Left', 'Right']) {
+      const feet = ['Foot', 'ToeBase', 'Toe_End'].map((n) => skinned.skeleton.bones.indexOf(model.getObjectByName(BONE(side + n)))).filter((i) => i >= 0);
+      const cand = [];
+      for (let i = 0; i < geo.attributes.position.count; i++) {
+        let w = 0; for (let j = 0; j < 4; j++) if (feet.includes(sIdx.getComponent(i, j))) w += sW.getComponent(i, j);
+        if (w < 0.5) continue;
+        skinned.getVertexPosition(i, v); skinned.localToWorld(v);
+        if (v.y - floor < 0.12) cand.push({ i, x: v.x, y: v.y, z: v.z });
+      }
+      const pick = new Set();
+      const take = (key, dir, n, maxY) => cand.filter((c) => c.y - floor < maxY).sort((a, b) => dir * (b[key] - a[key])).slice(0, n).forEach((c) => pick.add(c.i));
+      take('y', -1, 24, 1); take('z', 1, 8, 0.06); take('z', -1, 8, 0.06); take('x', 1, 6, 0.06); take('x', -1, 6, 0.06);
+      H.soles.push(...pick);
+    }
+  }
+  // the cannon's muzzle: the far end of the skin around the right hand
+  H.muzzle = null;
+  const hand = H.bones.RightHand, fore = H.bones.RightForeArm;
+  if (skinned && hand && fore) {
+    const bi = skinned.skeleton.bones.indexOf(hand), geo = skinned.geometry, sIdx = geo.attributes.skinIndex, sW = geo.attributes.skinWeight;
+    const a = fore.getWorldPosition(new THREE.Vector3()), b = hand.getWorldPosition(new THREE.Vector3()), axis = b.clone().sub(a).normalize();
+    let best = -Infinity; const tip = new THREE.Vector3(), v = new THREE.Vector3();
+    for (let i = 0; i < geo.attributes.position.count; i++) {
+      let w = 0; for (let j = 0; j < 4; j++) if (sIdx.getComponent(i, j) === bi) w += sW.getComponent(i, j);
+      if (w < 0.5) continue;
+      skinned.getVertexPosition(i, v); skinned.localToWorld(v);
+      const d = v.clone().sub(b).dot(axis);
+      if (d > best) { best = d; tip.copy(b).addScaledVector(axis, d); }
+    }
+    if (best > -Infinity) {
+      const muzzle = new THREE.Group();
+      hand.add(muzzle); muzzle.position.copy(hand.worldToLocal(tip.clone()));
+      const ws = hand.getWorldScale(new THREE.Vector3()).x;
+      muzzle.scale.setScalar(1 / ws);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), hero.muzzleMat);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: 0x3ad6c6, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+      glow.scale.setScalar(0.4);
+      muzzle.add(core, glow);
+      H.muzzle = muzzle; H.glow = glow;
+    }
+  }
+  hero.body.visible = false;
+  // afterimages for dashes
+  ghostCopies.forEach(({ scene: copy }, i) => {
+    const gh = ghosts[i]; if (!gh) return;
+    copy.rotation.y = Math.PI; copy.position.copy(model.position);
+    const root = new THREE.Group(), gw = new THREE.Group();
+    gw.add(copy); root.add(gw); root.visible = false; scene.add(root);
+    const nodes = []; copy.traverse((o) => { nodes.push(o); if (o.isMesh) { o.material = gh.mat; o.frustumCulled = false; o.castShadow = false; } });
+    gh.glb = { root, wrap: gw, nodes };
+  });
+  return H;
+}
+
+// back to the code-built hero (the tests use this to clean up)
+export function detachHeroGlb() {
+  const H = heroGlb;
+  if (!H.wrap) return;
+  hero.group.remove(H.wrap);
+  for (const gh of ghosts) if (gh.glb) { scene.remove(gh.glb.root); gh.glb = null; }
+  Object.assign(H, { wrap: null, model: null, skinned: null, soles: [], mixer: null, actions: {}, clip: '', nodes: [], bones: {}, muzzle: null, glow: null });
+  hero.body.visible = true;
+}
+
+// cross-fade to a clip; restart plays it again from the top even if it is already on
+function setClip(name, fade = 0.15, restart = false) {
+  const H = heroGlb, next = H.actions[name];
+  if (!next || (H.clip === name && !restart)) return;
+  for (const a of Object.values(H.actions)) if (a !== next && a.isRunning()) { if (fade > 0) a.fadeOut(fade); else a.stop(); }
+  next.reset();
+  if (fade > 0) next.fadeIn(fade); else next.setEffectiveWeight(1);
+  next.play();
+  H.clip = name;
+}
+
+// turn a bone (by weight w) so the line to its child points along the world direction dir
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion(), _qw = new THREE.Quaternion(), _qp = new THREE.Quaternion();
+function pointBone(bone, child, dir, w) {
+  if (!bone || !child || w <= 0) return;
+  bone.getWorldPosition(_a); child.getWorldPosition(_b);
+  const d0 = _b.sub(_a).normalize();
+  _q.setFromUnitVectors(d0, dir);
+  bone.getWorldQuaternion(_qw); _qw.premultiply(_q);
+  bone.parent.getWorldQuaternion(_qp); _qp.invert().multiply(_qw);
+  bone.quaternion.slerp(_qp, w);
+  bone.updateMatrixWorld(true);
+}
+
+const _aim = new THREE.Vector3(), _wall = new THREE.Vector3();
+function poseHeroGlb(dt, ix, iy, iz, aiming, now) {
+  const H = heroGlb, T = tuning;
+  const spd = Math.hypot(p.vx, p.vz), dashing = p.dashTimer > 0;
+  H.landT = Math.max(0, H.landT - dt);
+  // which clip
+  let clip, rate = 1;
+  if (!p.grounded) {
+    if (p.sliding) { clip = 'fall'; rate = 0.5; }
+    else if (dashing) clip = H.clip === 'jump' ? 'jump' : 'fall'; // an air dash keeps the air pose and leans
+    else if (p.vy > 0) clip = 'jump';
+    else clip = 'fall';
+  } else if (dashing) { clip = 'run'; rate = 2.2; }
+  else if (spd > 0.6) { clip = 'run'; rate = clamp(spd / 5.4, 0.6, 1.8); }
+  else if (H.landT > 0) clip = 'land';
+  else clip = 'idle';
+  setClip(clip, clip === 'jump' ? 0.08 : clip === 'land' ? 0.06 : 0.18);
+  if (H.actions[clip]) H.actions[clip].timeScale = rate;
+  // the hit-stop freezes the model too
+  H.mixer.update(hitStopRemaining() > 0 ? 0 : dt);
+  // the dash leans the whole body into the run
+  H.lean = damp(H.lean, dashing ? -0.32 : 0, 16, dt);
+  H.wrap.rotation.x = H.lean;
+  H.wrap.position.y = 0;
+  hero.group.updateMatrixWorld(true);
+  // on the ground, lift the body if a boot sole would sink below the floor (the boots are bigger than the
+  // feet the animations were made for)
+  if (p.grounded && H.skinned && H.soles.length) {
+    H.skinned.skeleton.update();
+    let lo = Infinity;
+    for (const i of H.soles) { H.skinned.getVertexPosition(i, _a); H.skinned.localToWorld(_a); if (_a.y < lo) lo = _a.y; }
+    if (lo < iy) { H.wrap.position.y = (iy - lo) / H.wrap.scale.y; hero.group.updateMatrixWorld(true); }
+  }
+  const B = H.bones;
+  // wall slide: the hand nearest the wall reaches for it
+  H.reachW = damp(H.reachW, p.sliding ? 1 : 0, 14, dt);
+  if (H.reachW > 0.01) {
+    _wall.set(-p.wallX, 0.7, -p.wallZ).normalize();
+    const right = new THREE.Vector3(Math.cos(anim.yaw), 0, -Math.sin(anim.yaw)); // the hero's right side
+    const useRight = right.dot(_wall) > 0 && !aiming;
+    const arm = useRight ? 'Right' : 'Left';
+    pointBone(B[arm + 'Arm'], B[arm + 'ForeArm'], _wall, H.reachW);
+    pointBone(B[arm + 'ForeArm'], B[arm + 'Hand'], _wall, H.reachW);
+  }
+  // aiming: the cannon arm points straight along the aim
+  H.aimW = damp(H.aimW, aiming && p.stun <= 0 ? 1 : 0, 30, dt);
+  if (H.aimW > 0.01) {
+    const r = aimRay();
+    _aim.set(r.fx, r.fy, r.fz).normalize();
+    pointBone(B.RightArm, B.RightForeArm, _aim, H.aimW);
+    pointBone(B.RightForeArm, B.RightHand, _aim, H.aimW);
+    pointBone(B.RightHand, B.RightHandIndex1, _aim, H.aimW);
+  }
+  // the muzzle glow follows the charge
+  if (H.glow) {
+    const lvl = !p.charging ? -1 : p.charge >= T.chargeTime2 ? 2 : p.charge >= T.chargeTime1 ? 1 : 0;
+    const pulse = 0.5 + 0.5 * Math.sin(now * (lvl === 2 ? 40 : 22));
+    H.glow.material.color.set(lvl === 2 ? 0xffb347 : 0x3ad6c6);
+    H.glow.material.opacity = lvl >= 1 ? 0.6 + pulse * 0.4 : 0.35;
+    H.glow.scale.setScalar(lvl === 2 ? 0.75 + pulse * 0.25 : lvl === 1 ? 0.5 + pulse * 0.15 : 0.3);
+  }
+}
+on('jump', () => setClip('jump', 0.05, true));
+on('walljump', () => setClip('jump', 0.05, true));
+on('land', (e) => { if (e.impact > 6) heroGlb.landT = heroGlb.actions.land ? heroGlb.actions.land.getClip().duration * 0.8 : 0; });
 
 const sfx = {
   jump: () => tone(320, 640, 0.1, 'square', 0.08),
@@ -173,6 +391,7 @@ on('lava', (e) => {
 export function renderPlayer(dt, ix, iy, iz) {
   const T = tuning;
   const now = performance.now() / 1000;
+  if (!heroGlb.requested) requestHeroGlb();
   hero.group.position.set(ix, iy, iz);
   hero.group.visible = p.dead <= 0 && p.returning <= 0 && !(p.iframes > 0 && Math.floor(now * 16) % 2 === 0);
   const targetYaw = Math.atan2(-p.faceX, -p.faceZ);
@@ -201,7 +420,8 @@ export function renderPlayer(dt, ix, iy, iz) {
   if (p.sliding) { legL = 0.55; kneeL = -1.0; legR = 0.95; kneeR = -0.6; armL = 2.5; elbowL = 0.3; armR = 0.4; elbowR = 0.6; lean = 0.15; headX = 0.2; twist = 0; }
   if (dashing) { legL = -0.55; kneeL = -0.7; legR = -1.0; kneeR = -1.1; armL = -0.9; elbowL = 0.2; armR = -0.45; elbowR = 0.15; lean = -0.42; twist = 0; }
   if (p.stun > 0) { lean = 0.35; armL = -0.6; armR = -0.6; elbowL = elbowR = 0.6; kneeL = kneeR = -0.4; headX = -0.3; twist = 0; }
-  if (p.aimTimer > 0 || (p.charging && p.charge > T.chargeTime1)) {
+  const aiming = p.aimTimer > 0 || (p.charging && p.charge > T.chargeTime1);
+  if (aiming) {
     // aiming: cannon arm straight out along the aim, the left hand braces it, shoulders turn into the shot
     armR = Math.PI / 2 + cam.pitch; elbowR = 0; headX = -cam.pitch * 0.5;
     if (!p.sliding && !dashing) { armL = 1.1 + cam.pitch * 0.6; elbowL = 1.25; twist = -0.22; }
@@ -234,6 +454,7 @@ export function renderPlayer(dt, ix, iy, iz) {
     hero.body.position.y = iy - lo;
   }
   hero.thrusterMat.emissiveIntensity = damp(hero.thrusterMat.emissiveIntensity, dashing ? 7 : 1.4, 20, dt);
+  if (heroGlb.wrap) poseHeroGlb(dt, ix, iy, iz, aiming, now);
 
   // charge glow at the arm cannon, particles drawn in, and the charge hum
   const lvl = !p.charging ? -1 : p.charge >= T.chargeTime2 ? 2 : p.charge >= T.chargeTime1 ? 1 : 0;
@@ -258,7 +479,7 @@ export function renderPlayer(dt, ix, iy, iz) {
   for (const gh of ghosts) {
     if (gh.life <= 0) continue;
     gh.life -= dt;
-    if (gh.life <= 0) { gh.g.visible = false; continue; }
+    if (gh.life <= 0) { gh.g.visible = false; if (gh.glb) gh.glb.root.visible = false; continue; }
     gh.mat.opacity = 0.42 * (gh.life / 0.26);
   }
 
