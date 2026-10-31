@@ -176,10 +176,21 @@ module.exports = {
       set({ vz: -tuning.runSpeed }); let lo = 9, hi = -9;
       for (let i = 0; i < 40; i++) { frame(); const y = box().min.y - p.y; lo = Math.min(lo, y); hi = Math.max(hi, y); }
       out.runFeet = [+lo.toFixed(3), +hi.toFixed(3)];
-      const poses = { idle: {}, run: { vz: -tuning.runSpeed }, jump: { grounded: false, vy: 6 }, fall: { grounded: false, vy: -6 }, wallslide: { grounded: false, sliding: true, vy: -2 }, dash: { dashTimer: 0.1, vz: -17 } };
-      out.clipFor = {};
-      for (const [name, o] of Object.entries(poses)) { set(o); frame(20); out.clipFor[name] = H.clip; }
-      set({}); H.landT = 0.3; frame(2); out.clipFor.land = H.clip; H.landT = 0;
+      // the clip underneath each move (Mixamo's idle and run), and the poses made in code for the air and landings
+      const knee = (side) => { const u = H.bones[side + 'UpLeg'].getWorldPosition(new THREE.Vector3()), k = H.bones[side + 'Leg'].getWorldPosition(new THREE.Vector3()), f = H.bones[side + 'Foot'].getWorldPosition(new THREE.Vector3()); return +(k.clone().sub(u).angleTo(f.sub(k)) * 180 / Math.PI).toFixed(1); };
+      const playing = () => Object.entries(H.actions).filter(([, a]) => a.isScheduled() && a.enabled && a.getEffectiveWeight() > 0.01).map(([n]) => n).sort().join(',');
+      set({}); frame(60); out.idleKnees = [knee('Left'), knee('Right')];
+      const poses = { idle: {}, run: { vz: -tuning.runSpeed }, rise: { grounded: false, vy: 8 }, fall: { grounded: false, vy: -12 }, wallslide: { grounded: false, sliding: true, vy: -2 }, dash: { dashTimer: 0.1, vz: -17 } };
+      out.moves = {};
+      for (const [name, o] of Object.entries(poses)) { set(o); frame(30); out.moves[name] = { clip: H.clip, airW: +H.airW.toFixed(2), airMix: +H.airMix.toFixed(2), reachW: +H.reachW.toFixed(2), knees: [knee('Left'), knee('Right')] }; }
+      // a jump, the fall, then the landing: the knees bend with the boots on the floor, then he stands back up in his idle
+      const W = await import('/src/core/world.js');
+      set({ grounded: false, vy: 10 }); frame(20); set({ grounded: false, vy: -12 }); frame(20);
+      set({}); W.events.push({ type: 'land', impact: 14, x: p.x, y: p.y, z: p.z }); W.dispatchEvents(); frame(4);
+      const lb = box();
+      out.landing = { landW: +H.landW.toFixed(2), knees: [knee('Left'), knee('Right')], feet: +(lb.min.y - p.y).toFixed(3) };
+      frame(90);
+      out.after = { clip: H.clip, playing: playing(), airW: +H.airW.toFixed(3), landW: +H.landW.toFixed(3), knees: [knee('Left'), knee('Right')] };
       // aiming: the cannon forearm lines up with the aim ray, up and down too
       out.aimDeg = [];
       for (const pitch of [0, 0.35, -0.3]) {
@@ -195,11 +206,16 @@ module.exports = {
       return out;
     });
     log('hero model file', glb);
-    expect(glb.codeBuiltHidden && glb.muzzle && glb.clips === 'fall,idle,jump,land,run', 'the 3D hero should replace the code-built body and bring its five clips and a cannon muzzle');
+    expect(glb.codeBuiltHidden && glb.muzzle && ['idle', 'run'].every((c) => glb.clips.split(',').includes(c)), 'the 3D hero should replace the code-built body and bring its idle and run clips and a cannon muzzle');
     expect(glb.height >= 1.9 && glb.height <= 2.1 && Math.abs(glb.idleFeet) <= 0.03, 'the 3D hero should be about 2 m tall and stand on the floor');
     expect(glb.runFeet[0] >= -0.03 && glb.runFeet[0] <= 0.03, `the 3D hero's boots should touch the floor while running and never sink into it (lowest ${glb.runFeet[0]} m)`);
-    const C = glb.clipFor;
-    expect(C.idle === 'idle' && C.run === 'run' && C.jump === 'jump' && C.fall === 'fall' && C.wallslide === 'fall' && C.dash === 'run' && C.land === 'land', `the 3D hero should pick the clip for each move (${JSON.stringify(C)})`);
+    const V = glb.moves, A = glb.after, L = glb.landing;
+    expect(V.idle.clip === 'idle' && V.idle.airW < 0.05 && V.run.clip === 'run' && V.dash.clip === 'run', `the 3D hero should stand in its idle and run with its run clip (${JSON.stringify(V)})`);
+    expect(V.rise.airW > 0.9 && V.rise.airMix < 0.3 && V.rise.knees[0] > 60 && V.rise.knees[1] > 45, `rising from a jump, the 3D hero should tuck both knees (${JSON.stringify(V.rise)})`);
+    expect(V.fall.airMix > 0.9 && V.fall.knees.every((k) => k < 30), `falling, the 3D hero's legs should come down (${JSON.stringify(V.fall)})`);
+    expect(V.wallslide.airW > 0.9 && V.wallslide.reachW > 0.9, 'on a wall slide the 3D hero should hold its air pose and reach for the wall');
+    expect(L.landW > 0.5 && L.knees.every((k) => k > 25) && Math.abs(L.feet) <= 0.03, `landing, the 3D hero should bend its knees with its boots on the floor (${JSON.stringify(L)})`);
+    expect(A.clip === 'idle' && A.playing === 'idle' && A.airW < 0.01 && A.landW < 0.01 && A.knees.every((k, i) => Math.abs(k - glb.idleKnees[i]) <= 3), `after landing, the 3D hero should be back in its plain idle (${JSON.stringify(A)}, idle knees ${glb.idleKnees})`);
     expect(glb.aimDeg.every((d) => d <= 8), `the cannon arm should point along the aim (off by ${glb.aimDeg.join(', ')} degrees)`);
     expect(glb.muzzleNearHand <= 0.35, 'the muzzle glow should sit at the cannon');
     expect(glb.restored, 'removing the 3D hero should bring the code-built hero back');
