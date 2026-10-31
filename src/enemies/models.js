@@ -201,13 +201,23 @@ export function buildEnemyVisuals(group) {
     if (e.kind === 'flyer' && modelsEnabled()) {
       loadModel('flyer').then(({ scene, animations }) => {
         if (!entVis.includes(v)) return;
+        // The GLB lens faces +Z; the code-built flyer and its yaw face -Z.
+        scene.rotation.y = Math.PI;
         const bounds = new THREE.Box3().setFromObject(scene);
         const size = bounds.getSize(new THREE.Vector3());
         if (size.x <= 0 || size.y <= 0 || size.z <= 0) return;
         scene.scale.multiplyScalar(Math.min(e.hx * 2 / size.x, e.hy / size.y, e.hz * 2 / size.z));
-        const center = new THREE.Box3().setFromObject(scene).getCenter(new THREE.Vector3());
-        scene.position.set(-center.x, e.hy / 2 - center.y, -center.z);
-        v.modelBasePosition = scene.position.clone();
+        const fittedBounds = new THREE.Box3().setFromObject(scene);
+        const center = fittedBounds.getCenter(new THREE.Vector3());
+        scene.position.copy(center).multiplyScalar(-1);
+        const model = new THREE.Group();
+        model.position.y = e.hy / 2;
+        model.add(scene);
+        v.modelBasePosition = model.position.clone();
+        // Reuse the existing warning eye in front of the GLB lens.
+        v.body.remove(v.eye);
+        model.add(v.eye);
+        v.eye.position.set(0, 0, -fittedBounds.getSize(new THREE.Vector3()).z / 2 - 0.02);
         v.modelFlashMats = [];
         scene.traverse((part) => {
           if (!part.isMesh) return;
@@ -223,8 +233,8 @@ export function buildEnemyVisuals(group) {
           v.modelMixer.clipAction(animations.find((clip) => /idle|hover/i.test(clip.name)) || animations[0]).play();
           v.modelLastTime = performance.now() / 1000;
         }
-        v.g.add(scene);
-        v.model = scene;
+        v.g.add(model);
+        v.model = model;
         v.body.visible = false;
       }).catch(() => {}); // The code-built flyer remains visible if the file cannot load.
     }
@@ -456,7 +466,7 @@ export function renderEnemies() {
       v.body.position.set(shake, 0.4, 0);
       v.body.rotation.x = e.st === 'swoop' ? -0.6 : 0;
       v.eyeMat.color.setRGB(1, e.st === 'tele' ? 0.9 : 0.35, e.st === 'tele' ? 0.6 : 0.15);
-      v.eye.scale.setScalar(e.st === 'tele' ? 1.6 + 0.3 * Math.sin(now * 40) : 1);
+      v.eye.scale.setScalar((e.st === 'tele' ? 1.6 + 0.3 * Math.sin(now * 40) : 1) * (v.model ? 0.65 : 1));
       if (v.model) {
         v.model.position.copy(v.modelBasePosition);
         v.model.position.x += shake;

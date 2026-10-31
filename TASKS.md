@@ -47,7 +47,7 @@ Blocked: nothing
 
 ## Codex
 Done:
-- Milestone 7 flyer GLB: the flying enemy uses H's drone model when available, sized to its existing hitbox; the code-built look remains the loading, failure, and test fallback (branch `codex/flyer-model`).
+- Milestone 7 flyer GLB: H's drone faces the player, keeps a pulsing attack-warning eye, and fits the existing hitbox; the code-built look remains the loading, failure, and test fallback (branch `codex/flyer-model`; PR #33).
 - Milestone 7 Warden model: layered furnace armor, boiler and vents, articulated limbs, and idle/attack poses without moving its hitbox or core (branch `codex/warden-model`).
 - Phase 3 Steam spin stops dealing steam damage 0.5 s before its energy rings launch; the safe interval has a visible and audible charge-up (branch `codex/steam-before-rings`).
 - Phase 3 energy rings: Steam spin stays in place, then launches two tall arena-wide rings 0.6 s apart; wall-jumps clear them (branch `codex/phase3-energy-rings`; PR #25; Playtest passes)
