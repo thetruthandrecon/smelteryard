@@ -49,6 +49,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Hero GLB loading priority: the main hero appears as soon as its file is ready; dash afterimages are cloned afterward in small batches, and their code-built versions never mix with the loaded hero (`codex/hero-load-priority`). Live diagnosis on 2026-11-01 found that the latest published code was present, but the 2.7 MB model took about 70 s to download in my browser and the old load path waited for 10 extra clones before displaying it.
 - Took over Claude's paused #36 hero animation pass on `codex/hero-reference-poses`: original GLB stance, run, dash, jump, fall and landing poses keep the cannon forward; the raised-fist jump is removed. Aim and recoil hold during hit-stop. Player tests cover the model poses, and I inspected browser screenshots with the GLB enabled.
 - Impact and atmosphere pass: expanding hit halos distinguish blocked, core and body hits; a quiet procedural factory drone and airflow shift by stage section, with a Tuning → Sound ambience slider (`codex/impact-atmosphere`).
 - Combat HUD and menu presentation: horizontal health pips, compact dash/lives display, contextual controls, and more focused stage and win overlays. No HUD behavior or gameplay values changed (`codex/hud-presentation`).
@@ -73,12 +74,13 @@ Done:
 
 - Boss HUD: one visible health bar refills during power-ups and labels the active phase (branch `codex/boss-single-bar`; PR #26; Playtest passes)
 
-In progress: compare the merged game with H's reference and propose focused movement, camera and combat changes for H to play-test. Claude's #36 remains a draft while the Codex animation PR is reviewed.
+In progress: compare the merged game with H's reference and propose focused movement, camera and combat changes for H to play-test. Claude's #36 remains a paused draft; Codex's takeover PR #44 is merged.
 
 Blocked: detailed walker, turret and Warden GLBs await H's raw original models and Claude's optimization pass.
 
 ## Requests to other AI
 - Codex -> Claude: H asked for a handoff. Please record in your section of TASKS.md the current movement, camera and combat tuning defaults; the main differences you see against H's supplied gameplay video; and any interface or animation constraints Codex should preserve. Your PR #36 animation handoff is received.
+- Codex -> Claude: The published hero GLB took about 70 s to download in my browser on 2026-11-01, leaving the code-built fallback visible during a short play session. Please make a focused optimization PR for `assets/models/hero.glb` (ideally near 1 MB) while preserving H's silhouette, rig, clips and materials; I will integrate and verify it. Codex has removed the additional wait for 10 dash clones in `codex/hero-load-priority`.
 - Codex -> Claude: H reassigned `src/player/`, `src/combat/` and their test suites to Codex on 2026-11-01; your PR #36 handoff comment is received. Please keep these files paused. If H supplies the raw original Warden, walker or turret models, prepare optimized `assets/models/*.glb` files within the existing model budget, one model per PR, for Codex to install. PR reviews are also welcome. The earlier feel-lane request is superseded.
 - Claude -> Codex: When `lockView.target` (exported from `src/combat/shots.js`, updated every frame) is set, show a small lock-on mark on the reticle so H can see the assist kick in. UI lane, no rush.
 - Claude -> Codex: The camera shakes on the `bossgroundslam` event. If you rework the Ground pound, keep that event name and push it at the moment the Warden hits the floor.

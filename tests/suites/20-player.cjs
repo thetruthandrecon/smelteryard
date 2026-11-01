@@ -210,6 +210,17 @@ module.exports = {
       M.detachHeroGlb();
       out.restored = hero.body.visible && !M.heroGlb.wrap && hero.group.children.every((c) => c === hero.body);
       set({}); frame(30);
+      // A real browser should install the model without a test-only manual attach.
+      Object.defineProperty(navigator, 'webdriver', { configurable: true, value: false });
+      try {
+        H.requested = false;
+        frame();
+        for (let i = 0; i < 100 && !H.wrap; i++) await new Promise((resolve) => setTimeout(resolve, 50));
+        out.autoLoaded = !!H.wrap && !hero.body.visible;
+      } finally {
+        delete navigator.webdriver;
+        M.detachHeroGlb();
+      }
       return out;
     });
     log('hero model file', glb);
@@ -227,5 +238,6 @@ module.exports = {
     expect(glb.aimDeg.every((d) => d <= 8), `the cannon arm should point along the aim (off by ${glb.aimDeg.join(', ')} degrees)`);
     expect(glb.muzzleNearHand <= 0.35, 'the muzzle glow should sit at the cannon');
     expect(glb.restored, 'removing the 3D hero should bring the code-built hero back');
+    expect(glb.autoLoaded, 'a real browser should replace the code-built hero automatically');
   },
 };
