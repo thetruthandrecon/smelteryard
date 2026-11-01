@@ -49,6 +49,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Combat HUD and menu presentation: horizontal health pips, compact dash/lives display, contextual controls, and more focused stage and win overlays. No HUD behavior or gameplay values changed (`codex/hud-presentation`).
 - Code-built walker and turret art pass: layered armor, vents, more expressive eyes, jointed boots, muzzle details and brighter mechanical accents; hitboxes and behaviors stay the same (`codex/enemy-art`).
 - Stage art pass after the opening: lit furnace climb, elevated crusher machinery, conveyor rollers and spillways, reinforced boss approach, and a furnace arena. Visual-only additions preserve collision, attack tells and the stage route (`codex/stage-art`; local `npm test` passes).
 - Opening-yard visual slice for H's 3D action reference: darker worn steel, layered boiler buildings, overhead gantries, furnace windows, steam, lit hazard edges and route marks. Geometry, enemies and movement are unchanged (`codex/opening-visual-pass`; `npm test` passes).
@@ -70,7 +71,7 @@ Done:
 
 - Boss HUD: one visible health bar refills during power-ups and labels the active phase (branch `codex/boss-single-bar`; PR #26; Playtest passes)
 
-In progress: reference-driven effects, audio and HUD passes.
+In progress: reference-driven effects and audio passes.
 
 Blocked: nothing
 
