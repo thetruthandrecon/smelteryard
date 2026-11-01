@@ -49,6 +49,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Code-built walker and turret art pass: layered armor, vents, more expressive eyes, jointed boots, muzzle details and brighter mechanical accents; hitboxes and behaviors stay the same (`codex/enemy-art`).
 - Stage art pass after the opening: lit furnace climb, elevated crusher machinery, conveyor rollers and spillways, reinforced boss approach, and a furnace arena. Visual-only additions preserve collision, attack tells and the stage route (`codex/stage-art`; local `npm test` passes).
 - Opening-yard visual slice for H's 3D action reference: darker worn steel, layered boiler buildings, overhead gantries, furnace windows, steam, lit hazard edges and route marks. Geometry, enemies and movement are unchanged (`codex/opening-visual-pass`; `npm test` passes).
 - Milestone 7 flyer GLB: H's drone faces the player, keeps a pulsing attack-warning eye, and fits the existing hitbox; the code-built look remains the loading, failure, and test fallback (branch `codex/flyer-model`; PR #33).
