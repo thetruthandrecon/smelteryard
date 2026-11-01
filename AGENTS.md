@@ -22,17 +22,17 @@ Each lane is a set of files that only its owner edits.
 
 | Folder or file | What lives there | Owner |
 |---|---|---|
-| `src/player/` | movement (`player.js`), collision (`physics.js`), health and lives (`health.js`), camera (`camera.js`), controls (`input.js`), hero model and animation (`model.js`) | Claude |
-| `src/combat/` | aiming, tap shots, charge shots, shot flight and hits (`shots.js`) | Claude |
+| `src/player/` | movement (`player.js`), collision (`physics.js`), health and lives (`health.js`), camera (`camera.js`), controls (`input.js`), hero model and animation (`model.js`) | Codex |
+| `src/combat/` | aiming, tap shots, charge shots, shot flight and hits (`shots.js`) | Codex |
 | `src/enemies/` | enemy kinds and behaviour (`enemies.js`), enemy models (`models.js`); bosses go here too | Codex |
 | `src/levels/` | level building blocks (`builders.js`), the levels (`smelter.js`, `test-yard.js`, `index.js`), platforms and crushers (`hazards.js`), checkpoints, goal, lava, capsules (`course.js`), level looks (`visuals.js`) | Codex |
 | `src/ui/`, `index.html` markup | HUD, menus, pause, clear and game-over screens, tuning panel, styles | Codex |
 | `src/fx/` | particles (`particles.js`), sound building blocks (`audio.js`) | Codex |
 | `src/core/`, `src/main.js`, the `<script>` lines and stylesheet link in `index.html`, `tests/run.cjs`, `tools/`, `package.json`, `.github/`, this file, `CLAUDE.md`, `README.md` | shared: Three.js import, helpers, tuning registry, world state and events, the step order, rendering setup, model loader (`models.js`), entry point, test runner, build and CI | Nobody without H's approval in chat |
-| `tests/suites/` | one test file per lane: `10-combat` and `20-player` and `90-input` (Claude); `30-enemies`, `40-levels`, `50-courses`, `80-screens`, `95-layout` (Codex) | per the suite's `owner` |
+| `tests/suites/` | `10-combat`, `20-player`, `30-enemies`, `40-levels`, `50-courses`, `80-screens`, `90-input`, `95-layout` | Codex |
 | `TASKS.md` | the live board | each AI edits only its own section and its own request lines |
 
-Feel belongs with Claude: movement, camera and combat decide how the game feels. Enemies, levels and UI plug into those systems.
+Feel belongs with Codex: movement, camera and combat decide how the game feels. Enemies, levels and UI plug into those systems. Claude may review PRs and prepare H's raw model files, but has paused edits to `src/player/`, `src/combat/` and their tests after H's 2026-11-01 reassignment.
 
 If your task needs a change in the other lane, don't edit it. Write the request under "Requests to other AI" in `TASKS.md` and tell H. If it needs a shared file, ask H in chat first and say in the PR that H approved it.
 
@@ -77,7 +77,7 @@ If your task needs a change in the other lane, don't edit it. Write the request 
   - `tests/suites/20-player.cjs` loads every file in `assets/models/` and fails if one doesn't load or breaks the budget above.
 - **Models are looks only:** hitboxes, physics, timing and every gameplay rule stay in code and never depend on a model. Keep the code-built look as the fallback while a model loads, if it fails to load, and in the tests.
 - **Animation** plays while rendering (an AnimationMixer driven from the render hooks), never inside the simulation step, so the game stays deterministic.
-- **Lanes:** the hero's model and animations are Claude's; enemies, the boss, props and the level are Codex's.
+- **Lanes:** Codex owns the hero's model and animations, enemies, the boss, props and the level. Claude can shrink and prepare the original GLB files H supplies; Codex integrates them into game code.
 
 ## Git rules
 1. Before anything, read `AGENTS.md` and `TASKS.md`, then `git pull` on `main`. Check open pull requests so you know what the other AI is changing.
@@ -125,7 +125,7 @@ Either AI may add a line here when H states a decision; mention it in the PR.
   - Spikes and lava take a quarter of health (4 of 16 HP) and send you back to the last checkpoint. Neither shows a damage message or a "Back to checkpoint" message.
   - Running out of health, or being crushed, costs a life. There are 3 lives per run, and losing the last one is game over (restart from the beginning).
   - The "N lives left" message after losing a life stays.
-- Lanes as in the table above: the boss belongs to Codex; movement, camera and combat belong to Claude.
+- Lanes as in the table above: H reassigned movement, camera, combat, the hero model and their tests to Codex on 2026-11-01. Claude paused PR #36 and left a handoff comment there. Claude may continue model-file preparation and PR reviews.
 - Boss HUD (H, 2026-10-29): show one health bar at a time. It refills during each power-up and labels the active Phase 1, 2 or 3.
 - 2026-10-28:
   - Charged shots must beat tapping for the same time: level 1 = 4, level 2 = 12 damage (a tap is 1), adjustable in the tuning panel.
@@ -159,7 +159,7 @@ The fight also needs:
 - a clear tell (a flash or a sound) about half a second before every attack
 - a defeat explosion and a win screen
 
-The original plan also has a soft lock-on for the boss (shots bend slightly toward it); that is combat, so Claude.
+The original plan also has a soft lock-on for the boss (shots bend slightly toward it); combat is now Codex-owned.
 
 **Done when:** every hit the player takes feels like their own mistake, not a cheap shot.
 
