@@ -49,6 +49,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Took over Claude's paused #36 hero animation pass on `codex/hero-reference-poses`: original GLB stance, run, dash, jump, fall and landing poses keep the cannon forward; the raised-fist jump is removed. Aim and recoil hold during hit-stop. Player tests cover the model poses, and I inspected browser screenshots with the GLB enabled.
 - Impact and atmosphere pass: expanding hit halos distinguish blocked, core and body hits; a quiet procedural factory drone and airflow shift by stage section, with a Tuning → Sound ambience slider (`codex/impact-atmosphere`).
 - Combat HUD and menu presentation: horizontal health pips, compact dash/lives display, contextual controls, and more focused stage and win overlays. No HUD behavior or gameplay values changed (`codex/hud-presentation`).
 - Code-built walker and turret art pass: layered armor, vents, more expressive eyes, jointed boots, muzzle details and brighter mechanical accents; hitboxes and behaviors stay the same (`codex/enemy-art`).
@@ -72,7 +73,7 @@ Done:
 
 - Boss HUD: one visible health bar refills during power-ups and labels the active phase (branch `codex/boss-single-bar`; PR #26; Playtest passes)
 
-In progress: take over movement, camera, combat, hero animation and their tests after H's reassignment; review Claude's paused PR #36 and compare the merged presentation with H's reference.
+In progress: compare the merged game with H's reference and propose focused movement, camera and combat changes for H to play-test. Claude's #36 remains a draft while the Codex animation PR is reviewed.
 
 Blocked: detailed walker, turret and Warden GLBs await H's raw original models and Claude's optimization pass.
 
