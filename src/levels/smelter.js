@@ -5,16 +5,16 @@ import { addEnt } from '../enemies/enemies.js';
 // Smelter Yard: the full stage
 export function defineSmelter() {
   // 1. Intro run through the yard (floor top 0)
-  box(-7, 7, -1, 6, 12, 13, 'wall');
-  box(-6, 6, -1, 0, 12, -14);
-  box(-7, -6, -1, 3, 12, -14, 'wall'); box(6, 7, -1, 3, 12, -14, 'wall');
-  box(-6, 6, -1, 0, -18, -34);                                    // after a 4 m lava pit
-  box(-7, -6, -1, 3, -18, -34, 'wall');
-  box(6, 7, -1, 3, -18, -29, 'wall'); box(6, 8.5, -1, 3.2, -29, -33, 'wall'); box(6, 7, -1, 3, -33, -34, 'wall');
+  box(-7, 7, -1, 6, 12, 13, 'yardWall');
+  box(-6, 6, -1, 0, 12, -14, 'yardFloor');
+  box(-7, -6, -1, 3, 12, -14, 'yardWall'); box(6, 7, -1, 3, 12, -14, 'yardWall');
+  box(-6, 6, -1, 0, -18, -34, 'yardFloor');                         // after a 4 m lava pit
+  box(-7, -6, -1, 3, -18, -34, 'yardWall');
+  box(6, 7, -1, 3, -18, -29, 'yardWall'); box(6, 8.5, -1, 3.2, -29, -33, 'yardWall'); box(6, 7, -1, 3, -33, -34, 'yardWall');
   box(2.5, 4.5, 0, 1.2, -26, -28, 'crate');
   box(-4.5, -2.5, 0, 1.2, -30.5, -32.5, 'crate');
-  box(-6, 6, -1, 0, -42, -58);                                    // after an 8 m dash-jump pit
-  box(-7, -6, -1, 3, -42, -58, 'wall'); box(6, 7, -1, 3, -42, -58, 'wall');
+  box(-6, 6, -1, 0, -42, -58, 'yardFloor');                         // after an 8 m dash-jump pit
+  box(-7, -6, -1, 3, -42, -58, 'yardWall'); box(6, 7, -1, 3, -42, -58, 'yardWall');
   box(-6, 6, 0, 0.35, -47, -48, 'spike');
   box(-6, 6, -1, 1.6, -58, -74);                                  // step up to the furnace
   box(-7, -6, -1, 4.6, -58, -74, 'wall'); box(6, 7, -1, 4.6, -58, -74, 'wall');
