@@ -10,6 +10,7 @@ import { shake, reduceMotion } from '../player/camera.js';
 import { buildEnemyVisuals } from '../enemies/models.js';
 import { emit, burst, C_TEAL, C_MOLTEN, C_DUST } from '../fx/particles.js';
 import { tone, hiss, near } from '../fx/audio.js';
+import { buildStageArt } from './stage-art.js';
 
 function gridTex(base, line) {
   const rnd = seeded(7);
@@ -71,6 +72,13 @@ const MATS = {
   wall: new THREE.MeshStandardMaterial({ map: gridTex('#cfc3b6', '#7a6a5c'), color: 0x8f8378, roughness: 0.78, metalness: 0.25 }),
   yardFloor: new THREE.MeshStandardMaterial({ map: yardFloorTex, color: 0xc0c8cc, roughness: 0.74, metalness: 0.48 }),
   yardWall: new THREE.MeshStandardMaterial({ map: yardWallTex, color: 0xb7aaa0, roughness: 0.82, metalness: 0.32 }),
+  furnaceFloor: new THREE.MeshStandardMaterial({ map: gridTex('#59636a', '#a4714d'), color: 0xa9a9a4, roughness: 0.76, metalness: 0.42 }),
+  furnaceWall: new THREE.MeshStandardMaterial({ map: gridTex('#65574e', '#a26742'), color: 0xa3998f, roughness: 0.7, metalness: 0.5 }),
+  crusherFloor: new THREE.MeshStandardMaterial({ map: gridTex('#515960', '#b37a4e'), color: 0xabb0b1, roughness: 0.68, metalness: 0.55 }),
+  approachFloor: new THREE.MeshStandardMaterial({ map: gridTex('#47525b', '#729398'), color: 0xa9b0b2, roughness: 0.72, metalness: 0.48 }),
+  approachWall: new THREE.MeshStandardMaterial({ map: gridTex('#574a43', '#965d3c'), color: 0xaea39a, roughness: 0.73, metalness: 0.44 }),
+  arenaFloor: new THREE.MeshStandardMaterial({ map: gridTex('#343c42', '#92664b'), color: 0xb6b3ac, roughness: 0.8, metalness: 0.42 }),
+  arenaWall: new THREE.MeshStandardMaterial({ map: gridTex('#3c3531', '#805238'), color: 0xaba29b, roughness: 0.78, metalness: 0.42 }),
   crate: new THREE.MeshStandardMaterial({ map: gridTex('#d8b98e', '#8a6a42'), color: 0x9a8166, roughness: 0.8, metalness: 0.1 }),
   platform: new THREE.MeshStandardMaterial({ map: gridTex('#bfe9e4', '#3f8f88'), color: 0x8fb8b4, roughness: 0.6, metalness: 0.35 }),
   belt: new THREE.MeshStandardMaterial({ map: beltTex, color: 0xffffff, roughness: 0.7, metalness: 0.4 }),
@@ -106,6 +114,7 @@ const fontsReady = Promise.race([document.fonts ? document.fonts.load('600 54px 
 let levelGroup = null;
 let dynVis = [], capVis = [], cpVis = [];
 let yardSteam = [];
+let renderStageArt = null;
 const LV = { goalGem: null, goalBeam: null, doorGlow: null, doorPanels: [] };
 
 function buildOpeningYard(grp) {
@@ -162,6 +171,7 @@ function buildOpeningYard(grp) {
   }
 
   yardSteam = [];
+  renderStageArt = null;
   for (const [x, y, z] of [[-8.8, 16, -3.3], [8.8, 18, -18.3], [-8.8, 21, -29.3], [8.8, 17, -44.3]]) {
     for (let i = 0; i < 3; i++) {
       const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: 0x93a5ad, transparent: true, opacity: 0.15, depthWrite: false }));
@@ -304,12 +314,14 @@ export function buildLevelVisuals() {
     }
   }
   if (LEVEL.id === 'smelter') buildOpeningYard(grp);
+  if (LEVEL.id === 'smelter') renderStageArt = buildStageArt(grp);
   fontsReady.then(() => { if (levelGroup !== grp) return; for (const sg of SIGNS) { const s = makeSign(sg.text); s.position.set(sg.x, sg.y, sg.z); grp.add(s); } });
 }
 
 // per frame: moving pieces, capsules, the belt, checkpoint rings, the goal
 export function renderLevel(dt) {
   const now = performance.now() / 1000;
+  if (renderStageArt) renderStageArt(now);
   for (const v of yardSteam) {
     const rise = (now * 0.16 + v.phase) % 1;
     v.puff.position.set(v.x + Math.sin(now * 0.7 + v.phase * 6) * rise * 0.5, v.y + rise * 5, v.z);

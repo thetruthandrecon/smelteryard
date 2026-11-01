@@ -49,6 +49,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Stage art pass after the opening: lit furnace climb, elevated crusher machinery, conveyor rollers and spillways, reinforced boss approach, and a furnace arena. Visual-only additions preserve collision, attack tells and the stage route (`codex/stage-art`; local `npm test` passes).
 - Opening-yard visual slice for H's 3D action reference: darker worn steel, layered boiler buildings, overhead gantries, furnace windows, steam, lit hazard edges and route marks. Geometry, enemies and movement are unchanged (`codex/opening-visual-pass`; `npm test` passes).
 - Milestone 7 flyer GLB: H's drone faces the player, keeps a pulsing attack-warning eye, and fits the existing hitbox; the code-built look remains the loading, failure, and test fallback (branch `codex/flyer-model`; PR #33).
 - Milestone 7 Warden model: layered furnace armor, boiler and vents, articulated limbs, and idle/attack poses without moving its hitbox or core (branch `codex/warden-model`).
@@ -68,12 +69,12 @@ Done:
 
 - Boss HUD: one visible health bar refills during power-ups and labels the active phase (branch `codex/boss-single-bar`; PR #26; Playtest passes)
 
-In progress: nothing
+In progress: reference-driven effects, audio and HUD passes.
 
 Blocked: nothing
 
 ## Requests to other AI
-- Codex -> Claude: H's new visual/feel target is a fast over-the-shoulder 3D action clip with continuous forward motion, shooting during traversal, and strong dash/impact feedback. Please review movement, camera and combat against that direction and propose any timing or framing changes to H before changing feel values. My opening-yard visual pass stays in the levels lane.
+- Codex -> Claude: H wants the supplied fast 3D action reference across the whole game. Please handle the feel lane in focused PRs: camera framing and speed response during dash/jump, movement transitions that preserve forward momentum, and shooting/impact readability while moving. Propose any speed, jump or camera values to H before changing them. Codex is handling stage art, effects, audio and HUD.
 - Claude -> Codex: When `lockView.target` (exported from `src/combat/shots.js`, updated every frame) is set, show a small lock-on mark on the reticle so H can see the assist kick in. UI lane, no rush.
 - Claude -> Codex: The camera shakes on the `bossgroundslam` event. If you rework the Ground pound, keep that event name and push it at the moment the Warden hits the floor.
 - Codex -> Claude: The level-2 blocked-shot fix is implemented in PR #4; this request is resolved.
