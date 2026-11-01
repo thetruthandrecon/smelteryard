@@ -16,21 +16,21 @@ export function defineSmelter() {
   box(-6, 6, -1, 0, -42, -58, 'yardFloor');                         // after an 8 m dash-jump pit
   box(-7, -6, -1, 3, -42, -58, 'yardWall'); box(6, 7, -1, 3, -42, -58, 'yardWall');
   box(-6, 6, 0, 0.35, -47, -48, 'spike');
-  box(-6, 6, -1, 1.6, -58, -74);                                  // step up to the furnace
-  box(-7, -6, -1, 4.6, -58, -74, 'wall'); box(6, 7, -1, 4.6, -58, -74, 'wall');
+  box(-6, 6, -1, 1.6, -58, -74, 'furnaceFloor');                  // step up to the furnace
+  box(-7, -6, -1, 4.6, -58, -74, 'furnaceWall'); box(6, 7, -1, 4.6, -58, -74, 'furnaceWall');
   // 2. Furnace shaft. Part A: zig-zag between the walls, then step out onto the ledge
-  box(-1.6, 1.6, -1, 1.6, -74, -78);
-  box(-3.2, -1.6, -1, 12, -74, -79, 'wall'); box(1.6, 3.2, -1, 12, -74, -79, 'wall');
-  box(-1.6, 1.6, -1, 10.4, -78, -79, 'wall');
-  box(-4, 4, 8.4, 10.4, -79, -86);
+  box(-1.6, 1.6, -1, 1.6, -74, -78, 'furnaceFloor');
+  box(-3.2, -1.6, -1, 12, -74, -79, 'furnaceWall'); box(1.6, 3.2, -1, 12, -74, -79, 'furnaceWall');
+  box(-1.6, 1.6, -1, 10.4, -78, -79, 'furnaceWall');
+  box(-4, 4, 8.4, 10.4, -79, -86, 'furnaceFloor');
   // Part B: the taller chimney up to the crusher hall
-  box(-1.6, 1.6, 8.4, 10.4, -86, -90);
-  box(-3.2, -1.6, 8.4, 26.6, -86, -91, 'wall'); box(1.6, 3.2, 8.4, 26.6, -86, -91, 'wall');
-  box(-1.6, 1.6, 8.4, 25, -90, -91, 'wall');
+  box(-1.6, 1.6, 8.4, 10.4, -86, -90, 'furnaceFloor');
+  box(-3.2, -1.6, 8.4, 26.6, -86, -91, 'furnaceWall'); box(1.6, 3.2, 8.4, 26.6, -86, -91, 'furnaceWall');
+  box(-1.6, 1.6, 8.4, 25, -90, -91, 'furnaceWall');
   // 3. Crusher hall (floor top 25), with turrets on the side walls
-  box(-4, 4, 23, 25, -91, -150);
-  box(-6, -4, 23, 29, -104.5, -111, 'wall');
-  box(4, 6, 23, 29, -121.5, -127, 'wall');
+  box(-4, 4, 23, 25, -91, -150, 'crusherFloor');
+  box(-6, -4, 23, 29, -104.5, -111, 'furnaceWall');
+  box(4, 6, 23, 29, -121.5, -127, 'furnaceWall');
   crusher(-98, 0, 25); crusher(-104, 1.0, 25); crusher(-112, 2.0, 25); crusher(-120, 0.6, 25); crusher(-128, 1.6, 25);
   box(-4, 4, 25, 25.35, -115.5, -116.5, 'spike');
   // 4. Lava conveyor: a belt that drags you toward the edge, then three moving platforms up to the boss ledge
@@ -40,18 +40,18 @@ export function defineSmelter() {
   LEVEL.named.MPA = dynBox('platform', 1.5, 0.3, 1.5, { path: (t) => [0, 24.7, -173 + 3.5 * Math.cos(W * t)] });
   LEVEL.named.MPB = dynBox('platform', 1.5, 0.3, 1.5, { path: (t) => [2.5 * Math.sin(W * (t - 2.95)), 24.7, -181] });
   LEVEL.named.MPC = dynBox('platform', 1.5, 0.3, 1.5, { path: (t) => [0, 26.7 - 2 * Math.cos(W * (t - 0.6)), -186.5] });
-  box(-5, 5, 26, 28, -188.5, -216);
-  box(-6, -5, 26, 31, -188.5, -216, 'wall'); box(5, 6, 26, 31, -188.5, -216, 'wall');
-  box(-5, -2, 28, 35, -214, -216, 'wall'); box(2, 5, 28, 35, -214, -216, 'wall'); box(-2, 2, 33, 35, -214, -216, 'wall');
+  box(-5, 5, 26, 28, -188.5, -216, 'approachFloor');
+  box(-6, -5, 26, 31, -188.5, -216, 'approachWall'); box(5, 6, 26, 31, -188.5, -216, 'approachWall');
+  box(-5, -2, 28, 35, -214, -216, 'approachWall'); box(2, 5, 28, 35, -214, -216, 'approachWall'); box(-2, 2, 33, 35, -214, -216, 'approachWall');
   const bossDoor = box(-2, 2, 28, 33, -214.6, -215.4, 'door');
   bossDoor.closedMin = bossDoor.min.slice(); bossDoor.closedMax = bossDoor.max.slice();
   bossDoor.open = 0; bossDoor.triggered = false; bossDoor.openedAt = 0;
   LEVEL.named.bossDoor = bossDoor;
   // The arena starts just beyond the door. Keep the approach floor continuous with the room.
-  box(-5, 5, 26, 28, -216, -246);
-  box(-6, -5, 28, 37, -216, -246, 'wall'); box(5, 6, 28, 37, -216, -246, 'wall');
-  box(-6, 6, 28, 37, -245, -246, 'wall');
-  box(-6, 6, 37, 39, -216, -246, 'wall');
+  box(-5, 5, 26, 28, -216, -246, 'arenaFloor');
+  box(-6, -5, 28, 37, -216, -246, 'arenaWall'); box(5, 6, 28, 37, -216, -246, 'arenaWall');
+  box(-6, 6, 28, 37, -245, -246, 'arenaWall');
+  box(-6, 6, 37, 39, -216, -246, 'arenaWall');
   checkpoint(0, 0, 6); checkpoint(0, 25, -93.5); checkpoint(0, 25, -146); checkpoint(0, 28, -192);
   LEVEL.goal = { kind: 'door', x: 0, y: 28, z: -213, xHalf: 2.6, zMin: -214.7, zMax: -211.8, triggerZ: -211 };
   LEVEL.path = [12, -246];
