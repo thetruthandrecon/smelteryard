@@ -94,4 +94,3 @@ Blocked: final movement, camera and combat feel are in Claude's lane; detailed w
   - Charging the gun should do more damage (Claude).
   - After a merge the play link kept showing the old version until a hard refresh (Claude, refresh fix).
 - 2026-10-29: H prefers one boss health bar, with its current phase labelled and a visible refill during each power-up.
-
