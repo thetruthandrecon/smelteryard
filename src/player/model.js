@@ -170,7 +170,7 @@ export function attachHeroGlb({ scene: model, animations }, ghostCopies = []) {
   H.wrap = wrap; H.model = model;
   H.nodes = []; model.traverse((o) => H.nodes.push(o));
   for (const n of ['Hips', 'Spine1', 'RightArm', 'RightForeArm', 'RightHand', 'RightHandIndex1', 'LeftArm', 'LeftForeArm', 'LeftHand', 'LeftHandIndex1',
-    'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase']) H.bones[n] = model.getObjectByName(BONE(n));
+    'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase', 'LeftHandIndex2', 'LeftHandIndex3']) H.bones[n] = model.getObjectByName(BONE(n));
   H.mixer = new THREE.AnimationMixer(model);
   H.actions = {};
   for (const clip of animations) {
@@ -284,33 +284,36 @@ function pointBone(bone, child, dir, w) {
 
 // Poses made in code for the air and for landings (Mixamo's clips are only used for idle and run). Each entry
 // says where a bone points, as [forward, up, right] in the hero's own frame, from the bone to the next one:
-// thigh (UpLeg) -> shin (Leg) -> foot -> toes, upper arm -> forearm -> hand. The right arm is the cannon.
+// thigh (UpLeg) -> shin (Leg) -> foot -> toes, upper arm -> forearm -> hand -> fingers. The right arm is the cannon.
 const POSES = {
-  // rising and the peak: a compact tuck, both knees drawn up in front (the left one higher), toes pointed,
-  // the cannon held forward at chest height, the free arm out for balance
+  // rising and the peak, a hero's jump: the free hand reaches straight up for the sky in a fist, the cannon arm is
+  // bent at his side, both knees drawn up in front (the left one higher) with the toes pointed
   rise: {
     LeftUpLeg: [0.92, -0.39, 0.03], LeftLeg: [-0.22, -0.97, 0], LeftFoot: [0.45, -0.89, 0],
     RightUpLeg: [0.5, -0.86, 0.06], RightLeg: [-0.6, -0.8, 0], RightFoot: [0.15, -0.99, 0],
-    RightArm: [0.25, -0.9, 0.3], RightForeArm: [0.88, -0.32, 0.12],
-    LeftArm: [0.05, -0.82, -0.57], LeftForeArm: [0.4, -0.35, -0.85],
+    RightArm: [-0.22, -0.95, 0.2], RightForeArm: [0.92, 0.12, 0.1], RightHand: [0.92, 0.12, 0.1],
+    LeftArm: [0.18, 0.96, -0.2], LeftForeArm: [0.12, 0.99, -0.08], LeftHand: [0.1, 0.99, -0.05],
   },
-  // falling: the legs come down under the body, the left a little ahead, arms open for balance
+  // falling: the raised arm sweeps down and both arms open for balance, the legs come down under the body
   fall: {
     LeftUpLeg: [0.35, -0.94, -0.03], LeftLeg: [-0.06, -1, 0], LeftFoot: [0.5, -0.87, 0],
     RightUpLeg: [0.04, -1, 0.07], RightLeg: [-0.25, -0.97, 0], RightFoot: [0.4, -0.92, 0],
-    RightArm: [0.3, -0.82, 0.48], RightForeArm: [0.6, -0.5, 0.6],
-    LeftArm: [0.25, -0.82, -0.5], LeftForeArm: [0.55, -0.45, -0.7],
+    RightArm: [0.3, -0.82, 0.48], RightForeArm: [0.6, -0.5, 0.6], RightHand: [0.6, -0.5, 0.6],
+    LeftArm: [0.25, -0.82, -0.5], LeftForeArm: [0.55, -0.45, -0.7], LeftHand: [0.55, -0.45, -0.7],
   },
   // landing: knees bend to take the weight, boots stay flat, arms come forward a little
   land: {
     LeftUpLeg: [0.62, -0.78, -0.08], LeftLeg: [-0.45, -0.89, 0], LeftFoot: 'keep',
     RightUpLeg: [0.55, -0.83, 0.1], RightLeg: [-0.42, -0.9, 0], RightFoot: 'keep',
-    RightArm: [0.35, -0.9, 0.25], RightForeArm: [0.75, -0.55, 0.1],
-    LeftArm: [0.25, -0.9, -0.35], LeftForeArm: [0.6, -0.7, -0.2],
+    RightArm: [0.35, -0.9, 0.25], RightForeArm: [0.75, -0.55, 0.1], RightHand: [0.75, -0.55, 0.1],
+    LeftArm: [0.25, -0.9, -0.35], LeftForeArm: [0.6, -0.7, -0.2], LeftHand: [0.6, -0.7, -0.2],
   },
 };
-const CHILD = { LeftUpLeg: 'LeftLeg', LeftLeg: 'LeftFoot', LeftFoot: 'LeftToeBase', RightUpLeg: 'RightLeg', RightLeg: 'RightFoot', RightFoot: 'RightToeBase', RightArm: 'RightForeArm', RightForeArm: 'RightHand', LeftArm: 'LeftForeArm', LeftForeArm: 'LeftHand' };
-const LIMBS = ['LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightArm', 'RightForeArm', 'LeftArm', 'LeftForeArm'];
+// the free hand's fist: each finger joint folds in (about the joint's own z axis), in the air. Mixamo's simple hand
+// rig moves only part of the fingers, so this is as tight as the fist gets without a finer rig.
+const FIST = [['LeftHandIndex1', -1.35], ['LeftHandIndex2', -1.45], ['LeftHandIndex3', -1.1]];
+const CHILD = { LeftUpLeg: 'LeftLeg', LeftLeg: 'LeftFoot', LeftFoot: 'LeftToeBase', RightUpLeg: 'RightLeg', RightLeg: 'RightFoot', RightFoot: 'RightToeBase', RightArm: 'RightForeArm', RightForeArm: 'RightHand', RightHand: 'RightHandIndex1', LeftArm: 'LeftForeArm', LeftForeArm: 'LeftHand', LeftHand: 'LeftHandIndex1' };
+const LIMBS = ['LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightArm', 'RightForeArm', 'RightHand', 'LeftArm', 'LeftForeArm', 'LeftHand'];
 const _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
 // tip a bone forward (+) or back (-) about the hero's right side, by angle times weight
 function tiltBone(bone, angle, w) {
@@ -336,7 +339,7 @@ function applyPose(a, b, mix, w) {
   }
 }
 
-const _aim = new THREE.Vector3(), _wall = new THREE.Vector3();
+const _aim = new THREE.Vector3(), _wall = new THREE.Vector3(), _zAxis = new THREE.Vector3(0, 0, 1);
 function poseHeroGlb(dt, ix, iy, iz, aiming, now) {
   const H = heroGlb, T = tuning;
   const spd = Math.hypot(p.vx, p.vz), dashing = p.dashTimer > 0;
@@ -360,6 +363,11 @@ function poseHeroGlb(dt, ix, iy, iz, aiming, now) {
   H.airMix = H.airW < 0.05 ? mixTarget : damp(H.airMix, mixTarget, 9, adt);
   tiltBone(H.bones.Hips, 0.2 - 0.14 * H.airMix, H.airW); // lean into the jump, straighten up as the fall goes on
   applyPose(POSES.rise, POSES.fall, H.airMix, H.airW);
+  // the free hand clenches into a fist in the air (on top of the clip, which sets the fingers every frame)
+  if (H.airW > 0.001) {
+    for (const [n, ang] of FIST) { const bone = H.bones[n]; if (bone) bone.quaternion.multiply(_q.setFromAxisAngle(_zAxis, ang * H.airW)); }
+    H.bones.LeftHand && H.bones.LeftHand.updateMatrixWorld(true);
+  }
   // landing: a quick knee bend that springs back up (deeper for bigger drops, softer when running on)
   H.landT += adt;
   const dip = H.landT < 0.05 ? H.landT / 0.05 : Math.max(0, 1 - (H.landT - 0.05) / 0.22);

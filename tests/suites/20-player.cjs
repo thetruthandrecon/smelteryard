@@ -182,7 +182,12 @@ module.exports = {
       set({}); frame(60); out.idleKnees = [knee('Left'), knee('Right')];
       const poses = { idle: {}, run: { vz: -tuning.runSpeed }, rise: { grounded: false, vy: 8 }, fall: { grounded: false, vy: -12 }, wallslide: { grounded: false, sliding: true, vy: -2 }, dash: { dashTimer: 0.1, vz: -17 } };
       out.moves = {};
-      for (const [name, o] of Object.entries(poses)) { set(o); frame(30); out.moves[name] = { clip: H.clip, airW: +H.airW.toFixed(2), airMix: +H.airMix.toFixed(2), reachW: +H.reachW.toFixed(2), knees: [knee('Left'), knee('Right')] }; }
+      const y = (n) => H.model.getObjectByName('mixamorig' + n).getWorldPosition(new THREE.Vector3()).y;
+      for (const [name, o] of Object.entries(poses)) {
+        set(o); frame(30);
+        out.moves[name] = { clip: H.clip, airW: +H.airW.toFixed(2), airMix: +H.airMix.toFixed(2), reachW: +H.reachW.toFixed(2), knees: [knee('Left'), knee('Right')],
+          fistOverHead: +(y('LeftHand') - y('Head')).toFixed(2), cannonOverHips: +(y('RightHand') - y('Hips')).toFixed(2) };
+      }
       // a jump, the fall, then the landing: the knees bend with the boots on the floor, then he stands back up in his idle
       const W = await import('/src/core/world.js');
       set({ grounded: false, vy: 10 }); frame(20); set({ grounded: false, vy: -12 }); frame(20);
@@ -212,6 +217,7 @@ module.exports = {
     const V = glb.moves, A = glb.after, L = glb.landing;
     expect(V.idle.clip === 'idle' && V.idle.airW < 0.05 && V.run.clip === 'run' && V.dash.clip === 'run', `the 3D hero should stand in its idle and run with its run clip (${JSON.stringify(V)})`);
     expect(V.rise.airW > 0.9 && V.rise.airMix < 0.3 && V.rise.knees[0] > 60 && V.rise.knees[1] > 45, `rising from a jump, the 3D hero should tuck both knees (${JSON.stringify(V.rise)})`);
+    expect(V.rise.fistOverHead > 0.35 && Math.abs(V.rise.cannonOverHips) < 0.35, `rising, the 3D hero should reach up with its fist above its head and hold the cannon at its side (${JSON.stringify(V.rise)})`);
     expect(V.fall.airMix > 0.9 && V.fall.knees.every((k) => k < 30), `falling, the 3D hero's legs should come down (${JSON.stringify(V.fall)})`);
     expect(V.wallslide.airW > 0.9 && V.wallslide.reachW > 0.9, 'on a wall slide the 3D hero should hold its air pose and reach for the wall');
     expect(L.landW > 0.5 && L.knees.every((k) => k > 25) && Math.abs(L.feet) <= 0.03, `landing, the 3D hero should bend its knees with its boots on the floor (${JSON.stringify(L)})`);
