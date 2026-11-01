@@ -38,17 +38,35 @@ function makeEntityMesh(e) {
   if (e.kind === 'walker') {
     const shell = std({ color: 0x6b3218, roughness: 0.5, metalness: 0.45 });
     const dark = std({ color: 0x23272c, roughness: 0.7, metalness: 0.5 });
+    const edge = std({ color: 0xb47442, roughness: 0.42, metalness: 0.72 });
     const body = new THREE.Group(); body.position.y = 0.8; g.add(body);
-    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.62, 0.9), shell); hull.castShadow = true; body.add(hull);
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.58, 0.82), shell); hull.castShadow = true; body.add(hull);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.72), edge); crown.position.y = 0.29; crown.castShadow = true; body.add(crown);
+    const crest = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.75), dark); crest.position.set(0, 0.31, 0); body.add(crest);
+    for (const side of [-1, 1]) {
+      const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.42, 0.72), edge);
+      cheek.position.set(side * 0.43, -0.05, -0.04); cheek.rotation.z = side * 0.12; body.add(cheek);
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.3, 0.34), dark);
+      vent.position.set(side * 0.515, 0.02, 0.12); body.add(vent);
+      for (const z of [-0.02, 0.12, 0.26]) {
+        const slit = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.045), new THREE.MeshBasicMaterial({ color: 0xff6a22, toneMapped: false }));
+        slit.position.set(side * 0.54, 0.02, z); body.add(slit);
+      }
+    }
     const brow = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.14, 0.12), dark); brow.position.set(0, 0.16, -0.48); body.add(brow);
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff5a2a, toneMapped: false });
     const eye = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.05), eyeMat); eye.position.set(0, 0.02, -0.47); body.add(eye);
+    const eyeRim = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.25, 0.06), edge);
+    eyeRim.position.set(0, 0.02, -0.46); body.add(eyeRim); eye.position.z = -0.51;
     const spikeMat = std({ color: 0xc7ccd2, roughness: 0.35, metalness: 0.8 });
-    for (const x of [-0.3, 0, 0.3]) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 6), spikeMat); s.position.set(x, 0.46, 0.05); body.add(s); }
+    for (const x of [-0.3, 0, 0.3]) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.13, 6), spikeMat); s.position.set(x, 0.3, 0.12); body.add(s); }
+    const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.36, 0.18, 10), dark); waist.position.y = -0.39; body.add(waist);
     const legs = [];
     for (const x of [-0.3, 0.3]) {
       const hip = new THREE.Group(); hip.position.set(x, 0.5, 0); g.add(hip);
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.28), dark); leg.position.y = -0.25; hip.add(leg);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.47, 0.28), dark); leg.position.y = -0.24; hip.add(leg);
+      const shin = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.28, 0.31), edge); shin.position.set(0, -0.34, -0.04); hip.add(shin);
+      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.12, 0.48), shell); boot.position.set(0, -0.44, -0.1); hip.add(boot);
       legs.push(hip);
     }
     return { g, flashMats, body, legs, eyeMat };
@@ -175,14 +193,36 @@ function makeEntityMesh(e) {
     chargeHalo.position.set(0, 2.12, -1.6); chargeHalo.visible = false; g.add(chargeHalo);
     return { g, flashMats, core, coreMat, visorMat, rim, coreShutters, legs, armJoints, headPivot, ventGlow, furnaceGlow, slamRing, slamRingMat, slamDisc, slamDiscMat, steamRing, steamRingMat, steamWall, steamWallMat, chargeHalo, chargeHaloMat, slamAt: -Infinity };
   }
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 }));
+  const turretIron = std({ color: 0x2b3139, roughness: 0.6, metalness: 0.5 });
+  const turretEdge = std({ color: 0xb37843, roughness: 0.4, metalness: 0.7 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 12), turretIron);
   base.position.y = 0.22; g.add(base);
+  for (const y of [0.1, 0.38]) {
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.53, 0.53, 0.055, 12), turretEdge);
+    rim.position.y = y; g.add(rim);
+  }
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.34, 0.33, 12), turretIron);
+  neck.position.y = 0.6; g.add(neck);
   const yawG = new THREE.Group(); yawG.position.y = 0.85; g.add(yawG);
   const pitchG = new THREE.Group(); yawG.add(pitchG);
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.75), std({ color: 0x8a4a22, roughness: 0.5, metalness: 0.45 }));
   pitchG.add(head);
+  const armorTop = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.1, 0.82), turretEdge);
+  armorTop.position.y = 0.3; pitchG.add(armorTop);
+  for (const side of [-1, 1]) {
+    const sidePlate = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.36, 0.62), turretIron);
+    sidePlate.position.set(side * 0.45, 0, -0.03); pitchG.add(sidePlate);
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.04, 8), turretEdge);
+    bolt.rotation.z = Math.PI / 2; bolt.position.set(side * 0.51, 0.02, -0.25); pitchG.add(bolt);
+  }
   const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.7, 10), std({ color: 0x23282f, roughness: 0.6, metalness: 0.6 }));
   barrel.rotation.x = Math.PI / 2; barrel.position.set(0, -0.02, -0.6); pitchG.add(barrel);
+  for (const z of [-0.65, -0.82, -0.97]) {
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.035, 8, 12), turretEdge);
+    collar.position.set(0, -0.02, z); pitchG.add(collar);
+  }
+  const muzzle = new THREE.Mesh(new THREE.CircleGeometry(0.075, 12), new THREE.MeshBasicMaterial({ color: 0xff7a28, toneMapped: false }));
+  muzzle.position.set(0, -0.02, -0.99); pitchG.add(muzzle);
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff5a2a, toneMapped: false });
   const eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), eyeMat); eye.position.set(0, 0.1, -0.38); pitchG.add(eye);
   head.castShadow = true;
