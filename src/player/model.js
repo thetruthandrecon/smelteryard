@@ -123,10 +123,13 @@ for (let i = 0; i < 10; i++) {
   g.visible = false; scene.add(g);
   ghosts.push({ g, mat, nodes, life: 0 });
 }
-let ghostNext = 0, ghostTimer = 0;
+let ghostNext = 0, glbGhostNext = 0, ghostTimer = 0;
+const glbGhosts = [];
 function spawnGhost() {
-  const gh = ghosts[ghostNext++ % ghosts.length];
-  if (gh.glb && heroGlb.wrap) {
+  // Never mix the old blocky afterimages with the loaded hero.
+  if (heroGlb.wrap && !glbGhosts.length) return;
+  const gh = heroGlb.wrap ? glbGhosts[glbGhostNext++ % glbGhosts.length] : ghosts[ghostNext++ % ghosts.length];
+  if (gh.glb) {
     // the 3D model hero's afterimage: its own copy of the model, frozen in the live pose
     const G = gh.glb;
     G.root.position.copy(hero.group.position); G.root.rotation.copy(hero.group.rotation);
@@ -150,9 +153,34 @@ export const heroGlb = { wrap: null, model: null, skinned: null, soles: [], mixe
 function requestHeroGlb() {
   heroGlb.requested = true;
   if (!modelsEnabled()) return;
-  Promise.all(Array.from({ length: 1 + ghosts.length }, () => loadModel('hero')))
-    .then(([main, ...copies]) => attachHeroGlb(main, copies))
+  loadModel('hero')
+    .then((main) => {
+      // Show the hero before cloning the extra rigs used only for dash afterimages.
+      attachHeroGlb(main);
+      const wrap = heroGlb.wrap;
+      const addNextGhost = (i) => {
+        if (i >= 3 || heroGlb.wrap !== wrap) return;
+        setTimeout(() => {
+          if (heroGlb.wrap !== wrap) return;
+          loadModel('hero').then((copy) => {
+            if (heroGlb.wrap === wrap) { attachGlbGhost(copy, i); addNextGhost(i + 1); }
+          }).catch(() => { /* the hero still plays without afterimages */ });
+        }, 0);
+      };
+      addNextGhost(0);
+    })
     .catch(() => { /* keep the code-built hero */ });
+}
+
+function attachGlbGhost({ scene: copy }, i) {
+  const gh = ghosts[i]; if (!gh) return;
+  copy.rotation.y = Math.PI; copy.position.copy(heroGlb.model.position);
+  const root = new THREE.Group(), gw = new THREE.Group();
+  gw.add(copy); root.add(gw); root.visible = false; scene.add(root);
+  const nodes = []; copy.traverse((o) => { nodes.push(o); if (o.isMesh) { o.material = gh.mat; o.frustumCulled = false; o.castShadow = false; } });
+  gh.glb = { root, wrap: gw, nodes };
+  gh.g.visible = false; gh.life = 0;
+  glbGhosts.push(gh);
 }
 
 // swap the model in (also used by the player tests, which load it themselves)
@@ -236,14 +264,7 @@ export function attachHeroGlb({ scene: model, animations }, ghostCopies = []) {
   }
   hero.body.visible = false;
   // afterimages for dashes
-  ghostCopies.forEach(({ scene: copy }, i) => {
-    const gh = ghosts[i]; if (!gh) return;
-    copy.rotation.y = Math.PI; copy.position.copy(model.position);
-    const root = new THREE.Group(), gw = new THREE.Group();
-    gw.add(copy); root.add(gw); root.visible = false; scene.add(root);
-    const nodes = []; copy.traverse((o) => { nodes.push(o); if (o.isMesh) { o.material = gh.mat; o.frustumCulled = false; o.castShadow = false; } });
-    gh.glb = { root, wrap: gw, nodes };
-  });
+  ghostCopies.forEach(attachGlbGhost);
   return H;
 }
 
@@ -253,6 +274,7 @@ export function detachHeroGlb() {
   if (!H.wrap) return;
   hero.group.remove(H.wrap);
   for (const gh of ghosts) if (gh.glb) { scene.remove(gh.glb.root); gh.glb = null; }
+  glbGhosts.length = 0;
   Object.assign(H, { wrap: null, model: null, skinned: null, soles: [], mixer: null, actions: {}, clip: '', nodes: [], bones: {}, muzzle: null, glow: null });
   hero.body.visible = true;
 }
