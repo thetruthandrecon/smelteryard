@@ -4,7 +4,7 @@ import * as THREE from '../core/three.js';
 import { SOLIDS, DYN, CAPSULES, CHECKPOINTS, SIGNS, DECO, LEVEL, on } from '../core/world.js';
 import { tuning } from '../core/tuning.js';
 import { seeded } from '../core/util.js';
-import { scene, canvasTex } from '../core/render.js';
+import { scene, canvasTex, dotTex } from '../core/render.js';
 import { p } from '../player/player.js';
 import { shake, reduceMotion } from '../player/camera.js';
 import { buildEnemyVisuals } from '../enemies/models.js';
@@ -21,6 +21,33 @@ function gridTex(base, line) {
     g.fillStyle = line; for (const [x, y] of [[14, 14], [s - 14, 14], [14, s - 14], [s - 14, s - 14]]) { g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); }
   }, true);
 }
+const yardFloorTex = canvasTex(256, (g, s) => {
+  const rnd = seeded(92);
+  g.fillStyle = '#56616b'; g.fillRect(0, 0, s, s);
+  g.fillStyle = '#333d47'; g.fillRect(0, 0, s, 8); g.fillRect(0, s - 8, s, 8);
+  g.fillRect(0, 0, 8, s); g.fillRect(s - 8, 0, 8, s);
+  g.strokeStyle = '#87939b'; g.lineWidth = 2;
+  g.strokeRect(12, 12, s - 24, s - 24);
+  for (const [x, y] of [[20, 20], [s - 20, 20], [20, s - 20], [s - 20, s - 20]]) {
+    g.fillStyle = '#202a32'; g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill();
+  }
+  for (let i = 0; i < 90; i++) {
+    const x = rnd() * s, y = rnd() * s, len = 5 + rnd() * 38;
+    g.strokeStyle = rnd() > 0.7 ? 'rgba(193,91,43,0.28)' : 'rgba(20,29,37,0.18)';
+    g.lineWidth = 1 + rnd() * 2; g.beginPath(); g.moveTo(x, y); g.lineTo(x + len, y - len * 0.3); g.stroke();
+  }
+}, true);
+const yardWallTex = canvasTex(256, (g, s) => {
+  const rnd = seeded(93);
+  g.fillStyle = '#665d57'; g.fillRect(0, 0, s, s);
+  g.fillStyle = '#353a3d'; g.fillRect(0, 0, s, 13); g.fillRect(0, s - 13, s, 13);
+  g.fillRect(0, 0, 11, s); g.fillRect(s - 11, 0, 11, s);
+  g.strokeStyle = '#9b8771'; g.lineWidth = 3; g.strokeRect(18, 18, s - 36, s - 36);
+  for (let i = 0; i < 70; i++) {
+    g.fillStyle = `rgba(39,29,26,${0.04 + rnd() * 0.12})`;
+    g.fillRect(rnd() * s, rnd() * s, 2 + rnd() * 10, 7 + rnd() * 34);
+  }
+}, true);
 const hazardTex = canvasTex(128, (g, s) => {
   g.fillStyle = '#1b1e22'; g.fillRect(0, 0, s, s);
   g.fillStyle = '#ff8a2a';
@@ -42,6 +69,8 @@ const doorTex = canvasTex(128, (g, s) => {
 const MATS = {
   floor: new THREE.MeshStandardMaterial({ map: gridTex('#c3cad0', '#6b7680'), color: 0x8c96a0, roughness: 0.82, metalness: 0.2 }),
   wall: new THREE.MeshStandardMaterial({ map: gridTex('#cfc3b6', '#7a6a5c'), color: 0x8f8378, roughness: 0.78, metalness: 0.25 }),
+  yardFloor: new THREE.MeshStandardMaterial({ map: yardFloorTex, color: 0xc0c8cc, roughness: 0.74, metalness: 0.48 }),
+  yardWall: new THREE.MeshStandardMaterial({ map: yardWallTex, color: 0xb7aaa0, roughness: 0.82, metalness: 0.32 }),
   crate: new THREE.MeshStandardMaterial({ map: gridTex('#d8b98e', '#8a6a42'), color: 0x9a8166, roughness: 0.8, metalness: 0.1 }),
   platform: new THREE.MeshStandardMaterial({ map: gridTex('#bfe9e4', '#3f8f88'), color: 0x8fb8b4, roughness: 0.6, metalness: 0.35 }),
   belt: new THREE.MeshStandardMaterial({ map: beltTex, color: 0xffffff, roughness: 0.7, metalness: 0.4 }),
@@ -76,7 +105,70 @@ const fontsReady = Promise.race([document.fonts ? document.fonts.load('600 54px 
 // everything that belongs to the current level lives in one group, rebuilt on a level change
 let levelGroup = null;
 let dynVis = [], capVis = [], cpVis = [];
+let yardSteam = [];
 const LV = { goalGem: null, goalBeam: null, doorGlow: null, doorPanels: [] };
+
+function buildOpeningYard(grp) {
+  const frame = new THREE.MeshStandardMaterial({ color: 0x29333c, metalness: 0.75, roughness: 0.42 });
+  const siding = new THREE.MeshStandardMaterial({ color: 0x62594e, metalness: 0.5, roughness: 0.7 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x18232b, metalness: 0.55, roughness: 0.65 });
+  const furnace = new THREE.MeshBasicMaterial({ color: 0xff6422, toneMapped: false });
+  const lamp = new THREE.MeshBasicMaterial({ color: 0xffc175, toneMapped: false });
+  const route = new THREE.MeshBasicMaterial({ color: 0x49b9c2, toneMapped: false });
+  const addBox = (x, y, z, w, h, d, mat) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z); m.castShadow = mat !== furnace && mat !== lamp && mat !== route;
+    m.receiveShadow = true; grp.add(m); return m;
+  };
+
+  // Repeated overhead frames break up the long straight view without closing the playable lane.
+  for (const z of [3, -11, -27, -52]) {
+    for (const side of [-1, 1]) {
+      addBox(side * 6.75, 4.4, z, 0.7, 8.8, 0.85, frame);
+      addBox(side * 5.45, 6.8, z, 2.7, 0.28, 0.75, siding);
+      addBox(side * 5.0, 6.48, z - 0.43, 0.9, 0.12, 0.08, lamp);
+    }
+    addBox(0, 7.35, z, 13.8, 1.0, 0.9, frame);
+    addBox(0, 6.78, z - 0.46, 3.6, 0.12, 0.1, furnace);
+    const light = new THREE.PointLight(0xff792b, 9, 16, 2);
+    light.position.set(0, 6.4, z); grp.add(light);
+  }
+
+  // Boiler houses, stacks and windows rise beyond the side walls as nearby scenery.
+  for (const [side, z, height] of [[-1, -5, 11], [1, -20, 13], [-1, -31, 16], [1, -46, 12]]) {
+    const x = side * 10;
+    addBox(x, height / 2 - 1, z, 5.2, height, 7, siding);
+    addBox(x, height - 0.5, z, 5.7, 0.65, 7.5, frame);
+    addBox(x - side * 1.2, height + 2.8, z + 1.7, 1.4, 6.5, 1.4, dark);
+    addBox(x - side * 1.2, height + 5.8, z + 1.7, 1.6, 0.32, 1.6, frame);
+    for (const dz of [-2, 0, 2]) {
+      addBox(x - side * 2.65, 5.6, z + dz, 0.11, 2.2, 1.1, furnace);
+      addBox(x - side * 2.72, 5.6, z + dz, 0.12, 2.5, 0.09, frame);
+    }
+  }
+
+  // Flush wall vents and floor marks make enemy lanes and jump edges legible.
+  for (const z of [7, -4, -22, -30, -45, -54]) for (const side of [-1, 1]) {
+    const x = side * 5.97;
+    addBox(x, 1.8, z, 0.07, 1.55, 2.5, dark);
+    for (const dz of [-0.75, -0.25, 0.25, 0.75]) addBox(x - side * 0.055, 1.8, z + dz, 0.08, 1.15, 0.09, furnace);
+  }
+  for (const z of [-12.9, -19.1, -32.9, -43.1]) {
+    addBox(0, 0.035, z, 10.8, 0.055, 0.14, lamp);
+    for (const x of [-4.8, -2.4, 0, 2.4, 4.8]) addBox(x, 0.036, z + 0.45, 1.1, 0.055, 0.13, furnace);
+  }
+  for (const z of [5, -1, -7, -23, -27, -48, -53]) {
+    for (const x of [-4.9, 4.9]) addBox(x, 0.026, z, 0.09, 0.045, 2.3, route);
+  }
+
+  yardSteam = [];
+  for (const [x, y, z] of [[-8.8, 16, -3.3], [8.8, 18, -18.3], [-8.8, 21, -29.3], [8.8, 17, -44.3]]) {
+    for (let i = 0; i < 3; i++) {
+      const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: 0x93a5ad, transparent: true, opacity: 0.15, depthWrite: false }));
+      grp.add(puff); yardSteam.push({ puff, x, y, z, phase: i / 3 });
+    }
+  }
+}
 export function buildLevelVisuals() {
   if (levelGroup) {
     scene.remove(levelGroup);
@@ -85,6 +177,7 @@ export function buildLevelVisuals() {
   const grp = new THREE.Group();
   levelGroup = grp;
   LV.doorPanels = [];
+  yardSteam = [];
   scene.add(grp);
   const edgePts = [];
   const spikeCones = [];
@@ -210,12 +303,19 @@ export function buildLevelVisuals() {
       top.rotation.x = -Math.PI / 2; top.position.set(d.x, d.y - 0.6, d.z); grp.add(top);
     }
   }
+  if (LEVEL.id === 'smelter') buildOpeningYard(grp);
   fontsReady.then(() => { if (levelGroup !== grp) return; for (const sg of SIGNS) { const s = makeSign(sg.text); s.position.set(sg.x, sg.y, sg.z); grp.add(s); } });
 }
 
 // per frame: moving pieces, capsules, the belt, checkpoint rings, the goal
 export function renderLevel(dt) {
   const now = performance.now() / 1000;
+  for (const v of yardSteam) {
+    const rise = (now * 0.16 + v.phase) % 1;
+    v.puff.position.set(v.x + Math.sin(now * 0.7 + v.phase * 6) * rise * 0.5, v.y + rise * 5, v.z);
+    v.puff.scale.setScalar(1.4 + rise * 4);
+    v.puff.material.opacity = 0.15 * Math.sin(Math.PI * rise);
+  }
   CAPSULES.forEach((c, i) => {
     const g = capVis[i];
     if (!g) return;
