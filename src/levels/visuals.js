@@ -1,7 +1,7 @@
 // What levels look like: surfaces, spikes, platforms, crushers, capsules, checkpoints, the goal,
 // signs and set dressing, plus their effects and sounds.
 import * as THREE from '../core/three.js';
-import { SOLIDS, DYN, CAPSULES, CHECKPOINTS, SIGNS, DECO, LEVEL, on } from '../core/world.js';
+import { SOLIDS, DYN, CAPSULES, CHECKPOINTS, SIGNS, DECO, LEVEL, state, on } from '../core/world.js';
 import { tuning } from '../core/tuning.js';
 import { seeded } from '../core/util.js';
 import { scene, canvasTex, dotTex } from '../core/render.js';
@@ -9,7 +9,7 @@ import { p } from '../player/player.js';
 import { shake, reduceMotion } from '../player/camera.js';
 import { buildEnemyVisuals } from '../enemies/models.js';
 import { emit, burst, C_TEAL, C_MOLTEN, C_DUST } from '../fx/particles.js';
-import { tone, hiss, near } from '../fx/audio.js';
+import { tone, hiss, near, setAmbience } from '../fx/audio.js';
 import { buildStageArt } from './stage-art.js';
 
 function gridTex(base, line) {
@@ -321,6 +321,7 @@ export function buildLevelVisuals() {
 // per frame: moving pieces, capsules, the belt, checkpoint rings, the goal
 export function renderLevel(dt) {
   const now = performance.now() / 1000;
+  setAmbience(LEVEL.id, p.z, state.mode === 'play');
   if (renderStageArt) renderStageArt(now);
   for (const v of yardSteam) {
     const rise = (now * 0.16 + v.phase) % 1;
