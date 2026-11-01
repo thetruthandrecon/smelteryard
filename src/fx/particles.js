@@ -1,7 +1,8 @@
 // Particle sparks (one shared pool) and the embers drifting up from the lava.
 import * as THREE from '../core/three.js';
 import { seeded } from '../core/util.js';
-import { scene, dotTex } from '../core/render.js';
+import { scene, camera, dotTex } from '../core/render.js';
+import { on } from '../core/world.js';
 
 const MAXP = 700;
 const pPos = new Float32Array(MAXP * 3).fill(-9999), pCol = new Float32Array(MAXP * 3), pBase = new Float32Array(MAXP * 3);
@@ -15,6 +16,26 @@ sparks.frustumCulled = false;
 scene.add(sparks);
 
 export const C_TEAL = new THREE.Color(0x3ad6c6), C_MOLTEN = new THREE.Color(0xff8a2a), C_DUST = new THREE.Color(0x8a7f74), C_WHITE = new THREE.Color(0xffffff), C_RED = new THREE.Color(0xff4a3d), C_AMBER = new THREE.Color(0xffc56a);
+
+// Brief world-space impact halos make hits legible even when particles overlap the target.
+const RINGS = Array.from({ length: 24 }, () => {
+  const mesh = new THREE.Mesh(
+    new THREE.RingGeometry(0.64, 1, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthTest: false, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }),
+  );
+  mesh.visible = false; mesh.renderOrder = 6; scene.add(mesh);
+  return { mesh, life: 0, duration: 0, radius: 0 };
+});
+let ringNext = 0;
+function impactHalo(x, y, z, color, radius, duration = 0.24) {
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
+  const ring = RINGS[ringNext++ % RINGS.length];
+  ring.mesh.position.set(x, y, z); ring.mesh.material.color.copy(color);
+  ring.life = duration; ring.duration = duration; ring.radius = radius; ring.mesh.visible = true;
+}
+on('hit', (e) => impactHalo(e.x, e.y, e.z, e.blocked ? C_WHITE : e.weakspot ? C_AMBER : C_TEAL, e.weakspot ? 0.62 : e.level === 2 ? 0.48 : 0.32));
+on('kill', ({ e }) => { if (e?.kind !== 'boss') impactHalo(e.x, e.y + e.hy * 0.55, e.z, C_MOLTEN, 0.8, 0.32); });
+on('bossdefeat', (e) => impactHalo(e.x, e.y, e.z, C_AMBER, 2.1, 0.48));
 
 // one particle: position, velocity, lifetime in seconds, colour, gravity
 export function emit(x, y, z, vx, vy, vz, life, color, grav) {
@@ -44,6 +65,15 @@ export function updateParticles(dt) {
   }
   pGeo.attributes.position.needsUpdate = true;
   pGeo.attributes.color.needsUpdate = true;
+  for (const ring of RINGS) {
+    if (ring.life <= 0) continue;
+    ring.life = Math.max(0, ring.life - dt);
+    ring.mesh.visible = ring.life > 0;
+    const age = 1 - ring.life / ring.duration;
+    ring.mesh.quaternion.copy(camera.quaternion);
+    ring.mesh.scale.setScalar(ring.radius * (0.65 + 1.8 * age));
+    ring.mesh.material.opacity = (1 - age) * (1 - age) * 0.9;
+  }
 }
 
 const EMB = 160;

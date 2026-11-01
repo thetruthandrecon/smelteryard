@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Smelter Yard Prototype</title>
+<title>Smelter Yard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&display=swap">
@@ -19,7 +19,7 @@
   <div class="timer" id="timer">0:00.00</div>
   <div class="sub"><span id="cp-label">Start</span> · <span id="best-label">No best yet</span></div>
 </div>
-<div class="hud" id="hud-hp" aria-label="Health"><div id="hp-bar"></div><div class="hp-label">HP</div><div class="lives" id="lives" aria-label="Lives left">×3</div></div>
+<div class="hud" id="hud-hp" aria-label="Health"><div class="hp-label">HP</div><div id="hp-bar"></div><div class="lives" id="lives" aria-label="Lives left">×3</div></div>
 <div class="hud" id="boss-hud" hidden aria-label="Boss health">
   <div class="boss-name" id="boss-name">Forge Warden</div>
   <div class="boss-track" role="progressbar" aria-label="Forge Warden Phase 1 health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="boss-fill"></i></div>
@@ -29,8 +29,8 @@
   <div class="pip on" id="pip-dash"><i></i>Dash</div>
   <div class="pip on" id="pip-air"><i></i>Air dash</div>
 </div>
-<div class="hud" id="hud-tr"><span id="fps">-- fps</span><span>·</span><span id="sound-label">Sound on</span></div>
-<div class="hud" id="hud-br">
+<div class="hud" id="hud-tr"><span id="fps">-- fps</span><span id="sound-label">Sound on</span><span>H · Controls</span></div>
+<div class="hud" id="hud-br" hidden>
   <b>WASD</b><span>Move</span>
   <b>Mouse</b><span>Look</span>
   <b>Left click / F</b><span>Shoot, hold to charge</span>
@@ -46,9 +46,9 @@
 
 <div class="overlay" id="ov-start">
   <section class="card" role="dialog" aria-labelledby="start-title">
-    <div class="eyebrow">Prototype · Milestone 6 of 7</div>
+    <div class="eyebrow">Forge District · Stage 01</div>
     <h1 id="start-title">Smelter Yard</h1>
-    <p class="lead">Fight through the yard, climb the furnace shaft, time the crusher hall, ride the lava conveyor and defeat the Forge Warden. Expect a first run to take a few minutes.</p>
+    <p class="lead">Break through the yard, climb the furnace shaft, cross the molten works and face the Forge Warden.</p>
     <dl class="keys">
       <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move</dd>
       <dt><kbd>Mouse</kbd></dt><dd>Look and aim (arrow keys work too)</dd>
@@ -64,7 +64,7 @@
       <button class="btn ghost" id="btn-yard" type="button">Test Yard</button>
       <button class="btn ghost" id="btn-start-tune" type="button">Tuning</button>
     </div>
-    <p class="note">The Test Yard is the short practice course from earlier milestones. Start captures the mouse; Esc releases it. If your browser won't capture it, hold the left button and drag to look, and shoot with F.</p>
+    <p class="note">H shows the controls during play. Start captures the mouse; Esc releases it. If your browser won't capture it, hold the left button and drag to look, and shoot with F.</p>
   </section>
 </div>
 
