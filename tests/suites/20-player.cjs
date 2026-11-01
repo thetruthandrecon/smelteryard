@@ -6,7 +6,7 @@ const MODELS = path.resolve(__dirname, '..', '..', 'assets', 'models');
 
 module.exports = {
   name: 'Player: health, lives, camera, hero and model files',
-  owner: 'Claude (player)',
+  owner: 'Codex (player)',
   async run({ page, expect, log }) {
     const r = await page.evaluate(() => {
       const G = window.__game; G.loadLevel('yard');
@@ -185,8 +185,10 @@ module.exports = {
       const y = (n) => H.model.getObjectByName('mixamorig' + n).getWorldPosition(new THREE.Vector3()).y;
       for (const [name, o] of Object.entries(poses)) {
         set(o); frame(30);
-        out.moves[name] = { clip: H.clip, airW: +H.airW.toFixed(2), airMix: +H.airMix.toFixed(2), reachW: +H.reachW.toFixed(2), knees: [knee('Left'), knee('Right')],
-          fistOverHead: +(y('LeftHand') - y('Head')).toFixed(2), cannonOverHips: +(y('RightHand') - y('Hips')).toFixed(2) };
+        const fwd = new THREE.Vector3(-Math.sin(hero.group.rotation.y), 0, -Math.cos(hero.group.rotation.y));
+        const fa = H.bones.RightForeArm.getWorldPosition(new THREE.Vector3()), fh = H.bones.RightHand.getWorldPosition(new THREE.Vector3());
+        out.moves[name] = { clip: H.clip, runW: +H.runW.toFixed(2), dashW: +H.dashW.toFixed(2), airW: +H.airW.toFixed(2), airMix: +H.airMix.toFixed(2), reachW: +H.reachW.toFixed(2), knees: [knee('Left'), knee('Right')],
+          cannonDeg: +(fh.sub(fa).angleTo(fwd) * 180 / Math.PI).toFixed(1), cannonOverHips: +(y('RightHand') - y('Hips')).toFixed(2) };
       }
       // a jump, the fall, then the landing: the knees bend with the boots on the floor, then he stands back up in his idle
       const W = await import('/src/core/world.js');
@@ -211,13 +213,13 @@ module.exports = {
       return out;
     });
     log('hero model file', glb);
-    expect(glb.codeBuiltHidden && glb.muzzle && ['idle', 'run'].every((c) => glb.clips.split(',').includes(c)), 'the 3D hero should replace the code-built body and bring its idle and run clips and a cannon muzzle');
+    expect(glb.codeBuiltHidden && glb.muzzle && glb.clips.split(',').includes('idle'), 'the 3D hero should replace the code-built body and bring its idle clip and a cannon muzzle');
     expect(glb.height >= 1.9 && glb.height <= 2.1 && Math.abs(glb.idleFeet) <= 0.03, 'the 3D hero should be about 2 m tall and stand on the floor');
     expect(glb.runFeet[0] >= -0.03 && glb.runFeet[0] <= 0.03, `the 3D hero's boots should touch the floor while running and never sink into it (lowest ${glb.runFeet[0]} m)`);
     const V = glb.moves, A = glb.after, L = glb.landing;
-    expect(V.idle.clip === 'idle' && V.idle.airW < 0.05 && V.run.clip === 'run' && V.dash.clip === 'run', `the 3D hero should stand in its idle and run with its run clip (${JSON.stringify(V)})`);
+    expect(V.idle.airW < 0.05 && V.idle.runW < 0.05 && V.run.runW > 0.9 && V.dash.dashW > 0.9, `the 3D hero should stand, run and dash in its own poses (${JSON.stringify(V)})`);
+    expect(['idle', 'run', 'dash', 'rise'].every((m) => V[m].cannonDeg < 30), `standing, running, dashing and jumping, the 3D hero should hold its cannon forward (${['idle', 'run', 'dash', 'rise'].map((m) => V[m].cannonDeg)} degrees off)`);
     expect(V.rise.airW > 0.9 && V.rise.airMix < 0.3 && V.rise.knees[0] > 60 && V.rise.knees[1] > 45, `rising from a jump, the 3D hero should tuck both knees (${JSON.stringify(V.rise)})`);
-    expect(V.rise.fistOverHead > 0.35 && Math.abs(V.rise.cannonOverHips) < 0.35, `rising, the 3D hero should reach up with its fist above its head and hold the cannon at its side (${JSON.stringify(V.rise)})`);
     expect(V.fall.airMix > 0.9 && V.fall.knees.every((k) => k < 30), `falling, the 3D hero's legs should come down (${JSON.stringify(V.fall)})`);
     expect(V.wallslide.airW > 0.9 && V.wallslide.reachW > 0.9, 'on a wall slide the 3D hero should hold its air pose and reach for the wall');
     expect(L.landW > 0.5 && L.knees.every((k) => k > 25) && Math.abs(L.feet) <= 0.03, `landing, the 3D hero should bend its knees with its boots on the floor (${JSON.stringify(L)})`);

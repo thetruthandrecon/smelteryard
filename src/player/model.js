@@ -145,7 +145,7 @@ function spawnGhost() {
 // Looks only: the collision capsule, movement and timing never read it.
 const HERO_HEIGHT = 2.0; // m, crest included, like the code-built hero
 const BONE = (n) => 'mixamorig' + n;
-export const heroGlb = { wrap: null, model: null, skinned: null, soles: [], mixer: null, actions: {}, clip: '', nodes: [], bones: {}, muzzle: null, glow: null, aimW: 0, reachW: 0, lean: 0, airW: 0, airMix: 0, landT: 9, landK: 0, landW: 0, requested: false };
+export const heroGlb = { wrap: null, model: null, skinned: null, soles: [], mixer: null, actions: {}, clip: '', nodes: [], bones: {}, muzzle: null, glow: null, aimW: 0, reachW: 0, runW: 0, dashW: 0, phase: 0, recoil: 0, airW: 0, airMix: 0, landT: 9, landK: 0, landW: 0, requested: false };
 
 function requestHeroGlb() {
   heroGlb.requested = true;
@@ -170,7 +170,7 @@ export function attachHeroGlb({ scene: model, animations }, ghostCopies = []) {
   H.wrap = wrap; H.model = model;
   H.nodes = []; model.traverse((o) => H.nodes.push(o));
   for (const n of ['Hips', 'Spine1', 'RightArm', 'RightForeArm', 'RightHand', 'RightHandIndex1', 'LeftArm', 'LeftForeArm', 'LeftHand', 'LeftHandIndex1',
-    'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase', 'LeftHandIndex2', 'LeftHandIndex3']) H.bones[n] = model.getObjectByName(BONE(n));
+    'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase', 'LeftHandIndex2', 'LeftHandIndex3', 'Spine', 'Spine2']) H.bones[n] = model.getObjectByName(BONE(n));
   H.mixer = new THREE.AnimationMixer(model);
   H.actions = {};
   for (const clip of animations) {
@@ -282,118 +282,183 @@ function pointBone(bone, child, dir, w) {
   bone.updateMatrixWorld(true);
 }
 
-// Poses made in code for the air and for landings (Mixamo's clips are only used for idle and run). Each entry
-// says where a bone points, as [forward, up, right] in the hero's own frame, from the bone to the next one:
-// thigh (UpLeg) -> shin (Leg) -> foot -> toes, upper arm -> forearm -> hand -> fingers. The right arm is the cannon.
+// The hero's own animations, made in code on the model's skeleton (Mixamo's idle only runs underneath to give
+// the spine, head and hands a little life). Each pose says where a bone points, as [forward, up, right] in the
+// hero's own frame, from the bone to the next one: thigh (UpLeg) -> shin (Leg) -> foot -> toes, upper arm ->
+// forearm -> hand. null keeps the foot flat as the clip has it. The right arm is the cannon. The style: always
+// combat-ready, the cannon held forward, low and leaning when fast, quick changes between poses.
 const POSES = {
-  // rising and the peak, a hero's jump: the free hand reaches straight up for the sky in a fist, the cannon arm is
-  // bent at his side, both knees drawn up in front (the left one higher) with the toes pointed
+  // standing ready: feet apart, knees soft, the cannon forward at the hip, the free fist in front of the body
+  stand: {
+    LeftUpLeg: [0.2, -0.96, -0.18], LeftLeg: [-0.08, -0.99, -0.08], LeftFoot: null,
+    RightUpLeg: [-0.06, -0.97, 0.22], RightLeg: [-0.16, -0.98, 0.1], RightFoot: null,
+    RightArm: [0.3, -0.86, 0.4], RightForeArm: [0.97, 0.05, 0.2], RightHand: [0.97, 0.05, 0.2],
+    LeftArm: [0.15, -0.93, -0.3], LeftForeArm: [0.8, 0.1, 0.35], LeftHand: [0.8, 0.1, 0.35],
+  },
+  // the run, four keys per stride (the second half mirrors the first): left foot reaching forward, then passing
+  // over the left foot with the right knee driving up
+  runReach: {
+    LeftUpLeg: [0.6, -0.8, -0.04], LeftLeg: [0.12, -0.99, 0], LeftFoot: [0.8, -0.6, 0],
+    RightUpLeg: [-0.45, -0.89, 0.04], RightLeg: [-0.88, -0.47, 0], RightFoot: [-0.3, -0.95, 0],
+  },
+  runPass: {
+    LeftUpLeg: [-0.05, -1, -0.04], LeftLeg: [-0.3, -0.95, 0], LeftFoot: [0.85, -0.5, 0],
+    RightUpLeg: [0.85, -0.53, 0.04], RightLeg: [-0.45, -0.89, 0], RightFoot: [0.35, -0.94, 0],
+  },
+  // running arms: the cannon stays up and ready, the free arm pumps against the legs
+  runArms: { RightArm: [0.35, -0.85, 0.32], RightForeArm: [0.96, 0.12, 0.15], RightHand: [0.96, 0.12, 0.15] },
+  pumpBack: { LeftArm: [-0.5, -0.85, -0.15], LeftForeArm: [0.4, -0.55, -0.05], LeftHand: [0.4, -0.55, -0.05] },
+  pumpFwd: { LeftArm: [0.5, -0.82, -0.12], LeftForeArm: [0.6, 0.78, 0.08], LeftHand: [0.6, 0.78, 0.08] },
+  // the dash: low, the left leg bent in front, the right leg stretched behind, cannon forward, free arm back
+  dash: {
+    LeftUpLeg: [0.72, -0.69, -0.06], LeftLeg: [-0.25, -0.97, 0], LeftFoot: [0.95, -0.3, 0],
+    RightUpLeg: [-0.62, -0.78, 0.1], RightLeg: [-0.92, -0.38, 0], RightFoot: [-0.4, -0.92, 0],
+    RightArm: [0.45, -0.8, 0.38], RightForeArm: [0.98, 0.1, 0.12], RightHand: [0.98, 0.1, 0.12],
+    LeftArm: [-0.55, -0.75, -0.35], LeftForeArm: [-0.2, -0.9, -0.38], LeftHand: [-0.2, -0.9, -0.38],
+  },
+  // rising and the peak: the left knee tucked high, the right shin folded back, cannon forward, free arm out
   rise: {
-    LeftUpLeg: [0.92, -0.39, 0.03], LeftLeg: [-0.22, -0.97, 0], LeftFoot: [0.45, -0.89, 0],
-    RightUpLeg: [0.5, -0.86, 0.06], RightLeg: [-0.6, -0.8, 0], RightFoot: [0.15, -0.99, 0],
-    RightArm: [-0.22, -0.95, 0.2], RightForeArm: [0.92, 0.12, 0.1], RightHand: [0.92, 0.12, 0.1],
-    LeftArm: [0.18, 0.96, -0.2], LeftForeArm: [0.12, 0.99, -0.08], LeftHand: [0.1, 0.99, -0.05],
+    LeftUpLeg: [0.88, -0.47, 0.02], LeftLeg: [-0.3, -0.95, 0], LeftFoot: [0.45, -0.89, 0],
+    RightUpLeg: [0.15, -0.98, 0.08], RightLeg: [-0.8, -0.6, 0], RightFoot: [-0.15, -0.99, 0],
+    RightArm: [0.3, -0.85, 0.42], RightForeArm: [0.96, 0.2, 0.15], RightHand: [0.96, 0.2, 0.15],
+    LeftArm: [-0.2, -0.55, -0.81], LeftForeArm: [0.15, 0.55, -0.82], LeftHand: [0.15, 0.55, -0.82],
   },
-  // falling: the raised arm sweeps down and both arms open for balance, the legs come down under the body
+  // falling: the legs come down a little apart, the arms open for balance, the cannon still forward
   fall: {
-    LeftUpLeg: [0.35, -0.94, -0.03], LeftLeg: [-0.06, -1, 0], LeftFoot: [0.5, -0.87, 0],
-    RightUpLeg: [0.04, -1, 0.07], RightLeg: [-0.25, -0.97, 0], RightFoot: [0.4, -0.92, 0],
-    RightArm: [0.3, -0.82, 0.48], RightForeArm: [0.6, -0.5, 0.6], RightHand: [0.6, -0.5, 0.6],
-    LeftArm: [0.25, -0.82, -0.5], LeftForeArm: [0.55, -0.45, -0.7], LeftHand: [0.55, -0.45, -0.7],
+    LeftUpLeg: [0.3, -0.95, -0.06], LeftLeg: [-0.1, -0.99, 0], LeftFoot: [0.55, -0.83, 0],
+    RightUpLeg: [-0.05, -0.99, 0.12], RightLeg: [-0.35, -0.94, 0], RightFoot: [0.35, -0.94, 0],
+    RightArm: [0.35, -0.75, 0.56], RightForeArm: [0.9, 0, 0.43], RightHand: [0.9, 0, 0.43],
+    LeftArm: [0.1, -0.6, -0.79], LeftForeArm: [0.4, -0.2, -0.9], LeftHand: [0.4, -0.2, -0.9],
   },
-  // landing: knees bend to take the weight, boots stay flat, arms come forward a little
+  // landing: knees bend to take the weight, boots flat, cannon forward
   land: {
-    LeftUpLeg: [0.62, -0.78, -0.08], LeftLeg: [-0.45, -0.89, 0], LeftFoot: 'keep',
-    RightUpLeg: [0.55, -0.83, 0.1], RightLeg: [-0.42, -0.9, 0], RightFoot: 'keep',
-    RightArm: [0.35, -0.9, 0.25], RightForeArm: [0.75, -0.55, 0.1], RightHand: [0.75, -0.55, 0.1],
-    LeftArm: [0.25, -0.9, -0.35], LeftForeArm: [0.6, -0.7, -0.2], LeftHand: [0.6, -0.7, -0.2],
+    LeftUpLeg: [0.62, -0.78, -0.12], LeftLeg: [-0.45, -0.89, -0.04], LeftFoot: null,
+    RightUpLeg: [0.5, -0.85, 0.14], RightLeg: [-0.45, -0.89, 0.04], RightFoot: null,
+    RightArm: [0.35, -0.85, 0.38], RightForeArm: [0.97, 0, 0.2], RightHand: [0.97, 0, 0.2],
+    LeftArm: [0.2, -0.88, -0.42], LeftForeArm: [0.75, -0.3, -0.3], LeftHand: [0.75, -0.3, -0.3],
   },
 };
-// the free hand's fist: each finger joint folds in (about the joint's own z axis), in the air. Mixamo's simple hand
-// rig moves only part of the fingers, so this is as tight as the fist gets without a finer rig.
+// how far the upper body leans forward (radians) in each pose
+const LEAN = { stand: 0.06, run: 0.24, dash: 0.5, rise: 0.16, fall: 0.06, land: 0.3 };
+const STRIDE = 2.7; // m covered by one full run cycle (two steps)
+// the free hand's fist: each finger joint folds in (about the joint's own z axis). Mixamo's simple hand rig moves
+// only part of the fingers, so this is as tight as the fist gets without a finer rig.
 const FIST = [['LeftHandIndex1', -1.35], ['LeftHandIndex2', -1.45], ['LeftHandIndex3', -1.1]];
 const CHILD = { LeftUpLeg: 'LeftLeg', LeftLeg: 'LeftFoot', LeftFoot: 'LeftToeBase', RightUpLeg: 'RightLeg', RightLeg: 'RightFoot', RightFoot: 'RightToeBase', RightArm: 'RightForeArm', RightForeArm: 'RightHand', RightHand: 'RightHandIndex1', LeftArm: 'LeftForeArm', LeftForeArm: 'LeftHand', LeftHand: 'LeftHandIndex1' };
 const LIMBS = ['LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightArm', 'RightForeArm', 'RightHand', 'LeftArm', 'LeftForeArm', 'LeftHand'];
-const _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
+// the same pose for the other side: left and right swap, and so does the sideways direction
+const mirror = (pose) => Object.fromEntries(Object.entries(pose).map(([n, v]) => [n.startsWith('Left') ? 'Right' + n.slice(4) : 'Left' + n.slice(5), v && [v[0], v[1], -v[2]]]));
+const RUN_KEYS = [POSES.runReach, POSES.runPass, mirror(POSES.runReach), mirror(POSES.runPass)];
+const PUMP_KEYS = [POSES.pumpBack, null, POSES.pumpFwd, null]; // null: half way between its neighbours
+const smooth = (t) => t * t * (3 - 2 * t);
+const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+const _fw = new THREE.Vector3(), _rt = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _d1 = new THREE.Vector3();
 // tip a bone forward (+) or back (-) about the hero's right side, by angle times weight
-function tiltBone(bone, angle, w) {
+function tiltBone(bone, angle, w = 1) {
   if (!bone || Math.abs(angle * w) < 1e-4) return;
-  _q.setFromAxisAngle(_rt.set(Math.cos(anim.yaw), 0, -Math.sin(anim.yaw)), -angle * w);
+  _q.setFromAxisAngle(_rt, -angle * w);
   bone.getWorldQuaternion(_qw); _qw.premultiply(_q);
   bone.parent.getWorldQuaternion(_qp); _qp.invert().multiply(_qw);
   bone.quaternion.copy(_qp); bone.updateMatrixWorld(true);
 }
-const _keep = { LeftFoot: new THREE.Vector3(), RightFoot: new THREE.Vector3() };
-function poseDir(v, out) { return out.set(0, 0, 0).addScaledVector(_fw, v[0]).addScaledVector(THREE.Object3D.DEFAULT_UP, v[1]).addScaledVector(_rt, v[2]).normalize(); }
-// blend pose a into pose b by mix, and lay the result over the clip by weight w
-function applyPose(a, b, mix, w) {
-  const B = heroGlb.bones;
-  if (w <= 0.001) return;
-  _fw.set(-Math.sin(anim.yaw), 0, -Math.cos(anim.yaw)); _rt.set(Math.cos(anim.yaw), 0, -Math.sin(anim.yaw));
-  for (const n of ['LeftFoot', 'RightFoot']) if (B[n] && B[CHILD[n]]) { B[n].getWorldPosition(_a); B[CHILD[n]].getWorldPosition(_keep[n]).sub(_a).normalize(); }
+// turn a bone about the vertical (+ turns the chest to the hero's left)
+function twistBone(bone, angle) {
+  if (!bone || Math.abs(angle) < 1e-4) return;
+  _q.setFromAxisAngle(_up, angle);
+  bone.getWorldQuaternion(_qw); _qw.premultiply(_q);
+  bone.parent.getWorldQuaternion(_qp); _qp.invert().multiply(_qw);
+  bone.quaternion.copy(_qp); bone.updateMatrixWorld(true);
+}
+// the run cycle at phase u (0..4, one unit per key): leg and free-arm directions
+function runPose(u) {
+  const k = Math.floor(u) % 4, t = smooth(u - Math.floor(u)), a = RUN_KEYS[k], b = RUN_KEYS[(k + 1) % 4], out = {};
+  for (const n in a) out[n] = lerp3(a[n], b[n], t);
+  const pk = (i) => PUMP_KEYS[i % 4] || Object.fromEntries(Object.keys(POSES.pumpBack).map((n) => [n, lerp3(POSES.pumpBack[n], POSES.pumpFwd[n], 0.5)]));
+  const pa = pk(k), pb = pk(k + 1);
+  for (const n in pa) out[n] = lerp3(pa[n], pb[n], t);
+  return Object.assign(out, POSES.runArms);
+}
+// blend pose tables: start from a, move toward b by t (missing entries fall back to the other pose)
+function mixPose(a, b, t) {
+  if (t <= 0.001) return a;
+  const out = {};
   for (const n of LIMBS) {
-    const va = a[n], vb = b[n];
-    if (va === 'keep' || vb === 'keep') { pointBone(B[n], B[CHILD[n]], _keep[n], w); continue; }
-    poseDir(va, _d1); poseDir(vb, _d2);
-    pointBone(B[n], B[CHILD[n]], _d1.lerp(_d2, mix).normalize(), w);
+    const va = n in a ? a[n] : b[n], vb = n in b ? b[n] : va;
+    out[n] = va === null || vb === null ? (t < 0.5 ? va : vb) : lerp3(va, vb, t);
+  }
+  return out;
+}
+// lay a full pose over the skeleton (feet marked null keep the flat direction the clip gave them)
+const _keep = {};
+function applyPose(pose) {
+  const B = heroGlb.bones;
+  for (const n of ['LeftFoot', 'RightFoot']) if (B[n] && B[CHILD[n]]) { B[n].getWorldPosition(_a); _keep[n] = B[CHILD[n]].getWorldPosition(new THREE.Vector3()).sub(_a).normalize(); }
+  for (const n of LIMBS) {
+    const v = pose[n];
+    if (v === undefined) continue;
+    if (v === null) { if (_keep[n]) pointBone(B[n], B[CHILD[n]], _keep[n], 1); continue; }
+    _d1.set(0, 0, 0).addScaledVector(_fw, v[0]).addScaledVector(_up, v[1]).addScaledVector(_rt, v[2]).normalize();
+    pointBone(B[n], B[CHILD[n]], _d1, 1);
   }
 }
 
 const _aim = new THREE.Vector3(), _wall = new THREE.Vector3(), _zAxis = new THREE.Vector3(0, 0, 1);
 function poseHeroGlb(dt, ix, iy, iz, aiming, now) {
-  const H = heroGlb, T = tuning;
+  const H = heroGlb, T = tuning, B = H.bones;
   const spd = Math.hypot(p.vx, p.vz), dashing = p.dashTimer > 0;
   const frozen = hitStopRemaining() > 0, adt = frozen ? 0 : dt;
-  // the clip underneath: Mixamo's run on the ground when moving, otherwise its idle
-  let clip = 'idle', rate = 1;
-  if (p.grounded && dashing) { clip = 'run'; rate = 2.2; }
-  else if (p.grounded && spd > 0.6) { clip = 'run'; rate = clamp(spd / 5.4, 0.6, 1.8); }
-  setClip(clip, 0.18);
-  H.actions[clip].timeScale = rate;
+  setClip('idle', 0.18);
   H.mixer.update(adt);
-  // the dash leans the whole body into the run
-  H.lean = damp(H.lean, dashing ? -0.32 : 0, 16, adt);
-  H.wrap.rotation.x = H.lean;
-  H.wrap.position.y = 0;
+  H.wrap.rotation.x = 0; H.wrap.position.y = 0;
   hero.group.updateMatrixWorld(true);
-  // in the air: the tuck holds from takeoff through the peak, then opens into the falling pose as the fall speeds up
+  _fw.set(-Math.sin(anim.yaw), 0, -Math.cos(anim.yaw)); _rt.set(Math.cos(anim.yaw), 0, -Math.sin(anim.yaw));
+  // how much of each: running, dashing, in the air (rising -> falling), landing; quick blends keep it snappy
+  const ground = p.grounded;
+  H.runW = damp(H.runW, ground && !dashing ? clamp((spd - 0.4) / 2.5, 0, 1) : 0, 16, adt);
+  H.dashW = damp(H.dashW, dashing ? 1 : 0, dashing ? 30 : 14, adt);
+  H.airW = damp(H.airW, ground ? 0 : 1, ground ? 26 : 20, adt);
   const jumpV = Math.sqrt(2 * T.gravity * T.jumpHeight);
-  H.airW = damp(H.airW, p.grounded ? 0 : 1, p.grounded ? 24 : 18, adt);
   const mixTarget = p.sliding ? 0.75 : clamp(0.15 - p.vy / jumpV, 0, 1);
-  H.airMix = H.airW < 0.05 ? mixTarget : damp(H.airMix, mixTarget, 9, adt);
-  tiltBone(H.bones.Hips, 0.2 - 0.14 * H.airMix, H.airW); // lean into the jump, straighten up as the fall goes on
-  applyPose(POSES.rise, POSES.fall, H.airMix, H.airW);
-  // the free hand clenches into a fist in the air (on top of the clip, which sets the fingers every frame)
-  if (H.airW > 0.001) {
-    for (const [n, ang] of FIST) { const bone = H.bones[n]; if (bone) bone.quaternion.multiply(_q.setFromAxisAngle(_zAxis, ang * H.airW)); }
-    H.bones.LeftHand && H.bones.LeftHand.updateMatrixWorld(true);
-  }
-  // landing: a quick knee bend that springs back up (deeper for bigger drops, softer when running on)
+  H.airMix = H.airW < 0.05 ? mixTarget : damp(H.airMix, mixTarget, 10, adt);
   H.landT += adt;
-  const dip = H.landT < 0.05 ? H.landT / 0.05 : Math.max(0, 1 - (H.landT - 0.05) / 0.22);
-  H.landW = p.grounded ? H.landK * dip * (spd > 0.6 ? 0.45 : 1) : 0;
-  applyPose(POSES.land, POSES.land, 0, H.landW);
-  // on the ground, keep the boots on the floor: lift the body if a sole would sink in, and during a landing
-  // lower it too so the boots stay planted while the knees bend
-  if (p.grounded && H.skinned && H.soles.length) {
+  const dip = H.landT < 0.05 ? H.landT / 0.05 : Math.max(0, 1 - (H.landT - 0.05) / 0.2);
+  H.landW = ground ? H.landK * dip * (spd > 0.6 ? 0.45 : 1) : 0;
+  if (ground && spd > 0.4) H.phase = (H.phase + adt * 4 * spd / STRIDE) % 4;
+  // build the pose: standing -> running -> dashing on the ground, rising -> falling in the air, then the landing
+  let pose = mixPose(POSES.stand, runPose(H.phase), H.runW);
+  pose = mixPose(pose, POSES.dash, H.dashW);
+  pose = mixPose(pose, mixPose(POSES.rise, POSES.fall, H.airMix), H.airW);
+  pose = mixPose(pose, POSES.land, H.landW);
+  let lean = LEAN.stand + (LEAN.run - LEAN.stand) * H.runW;
+  lean += (LEAN.dash - lean) * H.dashW;
+  lean += (LEAN.rise + (LEAN.fall - LEAN.rise) * H.airMix - lean) * H.airW;
+  lean += (LEAN.land - lean) * H.landW;
+  tiltBone(B.Spine, lean);
+  // the chest turns a little with the stride, and breathes when still
+  twistBone(B.Spine1, Math.sin(H.phase * Math.PI / 2) * 0.12 * H.runW * (1 - H.airW));
+  tiltBone(B.Spine2, Math.sin(now * 2.2) * 0.02 * (1 - H.runW) * (1 - H.airW));
+  applyPose(pose);
+  for (const [n, ang] of FIST) { const bone = B[n]; if (bone) bone.quaternion.multiply(_q.setFromAxisAngle(_zAxis, ang)); }
+  if (B.LeftHand) B.LeftHand.updateMatrixWorld(true);
+  // on the ground, plant the lower boot sole exactly on the floor however the legs are bent
+  if (ground && H.skinned && H.soles.length) {
     H.skinned.skeleton.update();
     let lo = Infinity;
     for (const i of H.soles) { H.skinned.getVertexPosition(i, _a); H.skinned.localToWorld(_a); if (_a.y < lo) lo = _a.y; }
-    if (lo < iy || H.landW > 0.01) { H.wrap.position.y = (iy - lo) / H.wrap.scale.y; hero.group.updateMatrixWorld(true); }
+    H.wrap.position.y = (iy - lo) / H.wrap.scale.y; hero.group.updateMatrixWorld(true);
   }
-  const B = H.bones;
   // wall slide: the hand nearest the wall reaches for it
   H.reachW = damp(H.reachW, p.sliding ? 1 : 0, 14, adt);
   if (H.reachW > 0.01) {
     _wall.set(-p.wallX, 0.7, -p.wallZ).normalize();
-    const right = new THREE.Vector3(Math.cos(anim.yaw), 0, -Math.sin(anim.yaw)); // the hero's right side
-    const useRight = right.dot(_wall) > 0 && !aiming;
+    const useRight = _rt.dot(_wall) > 0 && !aiming;
     const arm = useRight ? 'Right' : 'Left';
     pointBone(B[arm + 'Arm'], B[arm + 'ForeArm'], _wall, H.reachW);
     pointBone(B[arm + 'ForeArm'], B[arm + 'Hand'], _wall, H.reachW);
   }
-  // aiming: the cannon arm points straight along the aim
-  H.aimW = damp(H.aimW, aiming && p.stun <= 0 ? 1 : 0, 30, dt);
+  // aiming: the cannon arm points straight along the aim; each shot kicks it up a little
+  H.aimW = damp(H.aimW, aiming && p.stun <= 0 ? 1 : 0, 30, adt);
   if (H.aimW > 0.01) {
     const r = aimRay();
     _aim.set(r.fx, r.fy, r.fz).normalize();
@@ -401,6 +466,8 @@ function poseHeroGlb(dt, ix, iy, iz, aiming, now) {
     pointBone(B.RightForeArm, B.RightHand, _aim, H.aimW);
     pointBone(B.RightHand, B.RightHandIndex1, _aim, H.aimW);
   }
+  H.recoil = Math.max(0, H.recoil - adt * 9);
+  if (H.recoil > 0) { tiltBone(B.RightArm, -0.35 * H.recoil); tiltBone(B.Spine1, -0.06 * H.recoil); }
   // the muzzle glow follows the charge
   if (H.glow) {
     const lvl = !p.charging ? -1 : p.charge >= T.chargeTime2 ? 2 : p.charge >= T.chargeTime1 ? 1 : 0;
@@ -411,6 +478,7 @@ function poseHeroGlb(dt, ix, iy, iz, aiming, now) {
   }
 }
 on('land', (e) => { heroGlb.landT = 0; heroGlb.landK = clamp((e.impact - 3) / 12, 0, 1); });
+on('shoot', () => { heroGlb.recoil = 1; });
 
 const sfx = {
   jump: () => tone(320, 640, 0.1, 'square', 0.08),
