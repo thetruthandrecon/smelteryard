@@ -21,7 +21,7 @@ export const C_TEAL = new THREE.Color(0x3ad6c6), C_MOLTEN = new THREE.Color(0xff
 const RINGS = Array.from({ length: 24 }, () => {
   const mesh = new THREE.Mesh(
     new THREE.RingGeometry(0.64, 1, 32),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthTest: false, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }),
   );
   mesh.visible = false; mesh.renderOrder = 6; scene.add(mesh);
   return { mesh, life: 0, duration: 0, radius: 0 };
