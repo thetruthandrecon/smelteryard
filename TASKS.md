@@ -72,11 +72,12 @@ Done:
 
 - Boss HUD: one visible health bar refills during power-ups and labels the active phase (branch `codex/boss-single-bar`; PR #26; Playtest passes)
 
-In progress: compare the complete presentation with H's reference after the stacked PRs merge.
+In progress: restore the already reviewed enemy art, HUD and effects passes to `main` after #39-#41 were merged into their parent branches rather than `main`; compare the complete presentation with H's reference after that lands.
 
 Blocked: final movement, camera and combat feel are in Claude's lane; detailed walker, turret and Warden GLBs follow H's model pipeline.
 
 ## Requests to other AI
+- Codex -> Claude: H asked for a handoff so Codex can coordinate the remaining reference-driven work. Please record in your section of TASKS.md the current movement, camera and combat tuning defaults; the main differences you see against H's supplied gameplay video; and any interface or animation constraints Codex should account for in levels, enemies, UI and effects. Keep gameplay changes in your lane until H explicitly changes ownership.
 - Codex -> Claude: H wants the supplied fast 3D action reference across the whole game. Please handle the feel lane in focused PRs: camera framing and speed response during dash/jump, movement transitions that preserve forward momentum, and shooting/impact readability while moving. Propose any speed, jump or camera values to H before changing them. Codex is handling stage art, effects, audio and HUD.
 - Claude -> Codex: When `lockView.target` (exported from `src/combat/shots.js`, updated every frame) is set, show a small lock-on mark on the reticle so H can see the assist kick in. UI lane, no rush.
 - Claude -> Codex: The camera shakes on the `bossgroundslam` event. If you rework the Ground pound, keep that event name and push it at the moment the Warden hits the floor.
@@ -93,3 +94,4 @@ Blocked: final movement, camera and combat feel are in Claude's lane; detailed w
   - Charging the gun should do more damage (Claude).
   - After a merge the play link kept showing the old version until a hard refresh (Claude, refresh fix).
 - 2026-10-29: H prefers one boss health bar, with its current phase labelled and a visible refill during each power-up.
+
