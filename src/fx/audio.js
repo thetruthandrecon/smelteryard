@@ -1,9 +1,13 @@
 // Procedural sound with WebAudio: building blocks every lane uses to make its own sounds.
 import { clamp, store } from '../core/util.js';
+import { tuning, defineTuning } from '../core/tuning.js';
 import { p } from '../player/player.js';
+
+defineTuning('Sound', [['ambienceVolume', 'Factory ambience', 0.55, 0, 1, 0.05, '×']]);
 
 const MUTE_KEY = 'smelter-yard:muted:v1';
 let actx = null, master = null, noiseBuf = null, muted = !!store.get(MUTE_KEY, false);
+let ambience = null, ambienceSetting = '';
 
 // browsers only allow audio after a click or key press, so this runs when play starts
 export function ensureAudio() {
@@ -13,11 +17,33 @@ export function ensureAudio() {
     master = actx.createGain(); master.gain.value = 0.32; master.connect(actx.destination);
     noiseBuf = actx.createBuffer(1, actx.sampleRate * 0.5, actx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const drone = actx.createOscillator(), droneFilter = actx.createBiquadFilter(), droneGain = actx.createGain();
+    drone.type = 'sawtooth'; droneFilter.type = 'lowpass'; droneFilter.frequency.value = 180;
+    droneGain.gain.value = 0; drone.connect(droneFilter).connect(droneGain).connect(master); drone.start();
+    const air = actx.createBufferSource(), airFilter = actx.createBiquadFilter(), airGain = actx.createGain();
+    air.buffer = noiseBuf; air.loop = true; airFilter.type = 'bandpass'; airFilter.Q.value = 0.5;
+    airGain.gain.value = 0; air.connect(airFilter).connect(airGain).connect(master); air.start();
+    ambience = { drone, droneGain, airFilter, airGain };
   } catch { actx = null; }
 }
 export const isMuted = () => muted;
-export function setMuted(v) { muted = !!v; store.set(MUTE_KEY, muted); if (muted) stopHum(); }
+export function setMuted(v) { muted = !!v; store.set(MUTE_KEY, muted); if (muted) stopHum(); ambienceSetting = ''; }
 export const audioTime = () => (actx ? actx.currentTime : 0);
+
+// A quiet original factory bed; zone changes follow the stage without affecting simulation.
+export function setAmbience(level, z, active) {
+  if (!actx || !ambience) return;
+  const zone = level !== 'smelter' ? 0 : z < -216 ? 4 : z < -150 ? 3 : z < -90 ? 2 : z < -72 ? 1 : 0;
+  const vol = active && !muted ? tuning.ambienceVolume : 0;
+  const setting = `${zone}:${vol}`;
+  if (setting === ambienceSetting) return;
+  ambienceSetting = setting;
+  const t = actx.currentTime;
+  ambience.drone.frequency.setTargetAtTime([48, 43, 52, 57, 61][zone], t, 0.7);
+  ambience.airFilter.frequency.setTargetAtTime([450, 690, 530, 900, 620][zone], t, 0.7);
+  ambience.droneGain.gain.setTargetAtTime(vol * 0.023, t, 0.5);
+  ambience.airGain.gain.setTargetAtTime(vol * 0.012, t, 0.5);
+}
 
 // a pitch sweep from f0 to f1 Hz
 export function tone(f0, f1, dur, type = 'square', vol = 0.12, delay = 0) {
