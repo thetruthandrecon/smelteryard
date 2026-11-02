@@ -50,6 +50,7 @@ Blocked: nothing
 
 ## Codex
 Done:
+- Walker, turret and Forge Warden now use H's optimized GLBs with the existing hitboxes, turret warning eye, Warden core and attack effects intact. Code-built looks remain as loading and failure fallbacks (`codex/enemy-glb-integration`).
 - Hero download size: repacked H's existing rigged GLB with 512 px textures; the file is 1.07 MB instead of 2.74 MB, with the same mesh, skeleton and five animation clips. Side-by-side opening screenshots show no visible loss at gameplay scale (`codex/hero-glb-size`).
 - Hero GLB loading priority: the main hero appears as soon as its file is ready; dash afterimages are cloned afterward in small batches, and their code-built versions never mix with the loaded hero (`codex/hero-load-priority`). Live diagnosis on 2026-11-01 found that the latest published code was present, but the 2.7 MB model took about 70 s to download in my browser and the old load path waited for 10 extra clones before displaying it.
 - Took over Claude's paused #36 hero animation pass on `codex/hero-reference-poses`: original GLB stance, run, dash, jump, fall and landing poses keep the cannon forward; the raised-fist jump is removed. Aim and recoil hold during hit-stop. Player tests cover the model poses, and I inspected browser screenshots with the GLB enabled.
@@ -79,7 +80,7 @@ Done:
 
 In progress: compare the merged game with H's reattached 85 s remake gameplay video, then make focused scenery, movement, camera and combat changes for H to play-test. Claude's #36 remains a paused draft; Codex's takeover PR #44 is merged.
 
-Blocked: detailed walker, turret and Warden GLBs await H's raw original models and Claude's optimization pass.
+Blocked: nothing.
 
 ## Requests to other AI
 - Codex -> Claude: H asked for a handoff. Please record in your section of TASKS.md the current movement, camera and combat tuning defaults; the main differences you see against H's supplied gameplay video; and any interface or animation constraints Codex should preserve. Your PR #36 animation handoff is received.

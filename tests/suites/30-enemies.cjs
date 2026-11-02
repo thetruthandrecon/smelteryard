@@ -563,6 +563,45 @@ module.exports = {
       energyRings.closeCharge.damage === 0,
       'the final 0.5 s charge-up should let a player beside the Warden wall-jump without steam knockback');
 
+    const modeled = await page.evaluate(async () => {
+      const G = window.__game, M = await import('/src/enemies/models.js'), THREE = await import('/src/core/three.js');
+      Object.defineProperty(navigator, 'webdriver', { configurable: true, value: false });
+      const inspect = async (kind) => {
+        const e = G.ENTS.find((enemy) => enemy.kind === kind);
+        const v = M.entVis[G.ENTS.indexOf(e)];
+        for (let i = 0; i < 100 && !v.model; i++) await new Promise((resolve) => setTimeout(resolve, 50));
+        if (!v.model) return { loaded: false };
+        const size = new THREE.Box3().setFromObject(v.model).getSize(new THREE.Vector3());
+        return { loaded: true, fallbackHidden: !v.fallback.visible, connected: v.model.parent === v.g,
+          facing: v.model.children[0].rotation.y, width: size.x, height: size.y, depth: size.z,
+          bounds: [e.hx * 2, e.hy, e.hz * 2],
+          warningEye: kind === 'turret' ? v.eye.parent === v.model : undefined,
+          core: kind === 'boss' ? [v.core.position.x, v.core.position.y, v.core.position.z] : undefined,
+          effects: kind === 'boss' ? [v.slamRing, v.steamRing, v.chargeHalo].every((part) => part.parent === v.g) : undefined };
+      };
+      try {
+        G.loadLevel('yard');
+        const walker = await inspect('walker'), turret = await inspect('turret');
+        G.loadLevel('smelter');
+        const boss = await inspect('boss');
+        return { walker, turret, boss };
+      } finally {
+        delete navigator.webdriver;
+        (await import('/src/player/model.js')).detachHeroGlb();
+        G.loadLevel('yard');
+      }
+    });
+    log('enemy GLBs', modeled);
+    for (const [kind, v] of Object.entries(modeled)) {
+      expect(v.loaded && v.fallbackHidden && v.connected && Math.abs(v.facing - Math.PI) < 0.001,
+        `${kind} GLB should replace its code-built look and face the player`);
+      expect(v.width <= v.bounds[0] + 0.15 && v.height <= v.bounds[1] + 0.15 && v.depth <= v.bounds[2] + 0.15,
+        `${kind} GLB should fit its existing hitbox`);
+    }
+    expect(modeled.turret.warningEye, 'the turret warning eye should remain visible in front of the GLB');
+    expect(JSON.stringify(modeled.boss.core) === JSON.stringify([0, 2.12, -0.72]) && modeled.boss.effects,
+      'the Warden should keep the existing weak spot and attack effects at their original positions');
+
 
   },
 };

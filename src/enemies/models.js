@@ -230,14 +230,71 @@ function makeEntityMesh(e) {
 }
 
 // called by the level builder: one model per enemy, added to the level's group
-let entVis = [];
+export let entVis = [];
 let slagPatchVis = [];
 let slagTargetVis = [];
 let groundWaveVis = [];
 let energyRingVis = [];
+function attachEnemyModel(e, v) {
+  const keep = e.kind === 'boss' ? [v.core, v.rim, ...v.coreShutters.map(([shutter]) => shutter),
+    v.slamRing, v.slamDisc, v.steamRing, v.steamWall, v.chargeHalo] : [];
+  loadModel(e.kind === 'boss' ? 'warden' : e.kind).then(({ scene, animations }) => {
+    if (!entVis.includes(v)) return;
+    // All three GLBs face +Z; the existing enemy yaw and attack effects face -Z.
+    scene.rotation.y = Math.PI;
+    const bounds = new THREE.Box3().setFromObject(scene);
+    const size = bounds.getSize(new THREE.Vector3());
+    if (size.x <= 0 || size.y <= 0 || size.z <= 0) return;
+    const horizontal = Math.min(e.hx * 2 / size.x, e.hz * 2 / size.z) * (e.kind === 'turret' ? 0.86 : 1);
+    scene.scale.set(horizontal, e.kind === 'boss' ? e.hy / size.y : Math.min(horizontal, e.hy / size.y), horizontal);
+    const fittedBounds = new THREE.Box3().setFromObject(scene);
+    const center = fittedBounds.getCenter(new THREE.Vector3());
+    scene.position.copy(center).multiplyScalar(-1);
+    // Recess the furnace shell slightly so the original weak-spot glow stays in front of its chest.
+    if (e.kind === 'boss') scene.position.z += 0.2;
+    const model = new THREE.Group();
+    model.position.y = e.hy / 2;
+    model.add(scene);
+    v.modelBasePosition = model.position.clone();
+    v.modelFlashMats = [];
+    scene.traverse((part) => {
+      if (!part.isMesh) return;
+      part.castShadow = true;
+      const cloneMaterial = (mat) => {
+        const copy = mat.clone();
+        if (copy.isMeshStandardMaterial) v.modelFlashMats.push({ mat: copy, emissive: copy.emissive.clone(), intensity: copy.emissiveIntensity });
+        return copy;
+      };
+      part.material = Array.isArray(part.material) ? part.material.map(cloneMaterial) : cloneMaterial(part.material);
+    });
+    if (e.kind === 'turret') {
+      // Keep the existing telegraph eye visible in front of the GLB barrels.
+      model.add(v.eye);
+      v.eye.position.set(0, 0.1, -fittedBounds.getSize(new THREE.Vector3()).z / 2 - 0.08);
+      v.eye.scale.setScalar(0.65);
+    }
+    if (animations.length) {
+      v.modelMixer = new THREE.AnimationMixer(scene);
+      v.modelMixer.clipAction(animations.find((clip) => /idle/i.test(clip.name)) || animations[0]).play();
+      v.modelLastTime = performance.now() / 1000;
+    }
+    const fallback = new THREE.Group();
+    for (const child of [...v.g.children]) if (!keep.includes(child)) fallback.add(child);
+    v.g.add(fallback, model);
+    if (e.kind === 'boss') {
+      const furnaceLight = new THREE.PointLight(0xffaa66, 3, 7);
+      furnaceLight.position.set(0, 2.6, -2.8);
+      v.g.add(furnaceLight);
+    }
+    fallback.visible = false;
+    v.fallback = fallback;
+    v.model = model;
+  }).catch(() => {}); // Retain the code-built enemy when a file cannot load.
+}
 export function buildEnemyVisuals(group) {
   entVis = ENTS.map((e) => {
     const v = makeEntityMesh(e); group.add(v.g);
+    if (modelsEnabled() && (e.kind === 'walker' || e.kind === 'turret' || e.kind === 'boss')) attachEnemyModel(e, v);
     if (e.kind === 'flyer' && modelsEnabled()) {
       loadModel('flyer').then(({ scene, animations }) => {
         if (!entVis.includes(v)) return;
@@ -395,17 +452,29 @@ export function renderEnemies() {
     if (v.modelFlashMats) for (const { mat, emissive, intensity } of v.modelFlashMats) {
       mat.emissive.copy(emissive).addScalar(f); mat.emissiveIntensity = intensity + f * 1.5;
     }
+    if (v.modelMixer) {
+      v.modelMixer.update(Math.min(0.1, Math.max(0, now - v.modelLastTime)));
+      v.modelLastTime = now;
+    }
     if (e.kind === 'turret') {
       v.yawG.rotation.y = e.yaw;
       v.pitchG.rotation.x = e.pitch;
       const tele = e.tele;
       v.eyeMat.color.setRGB(1, 0.35 + tele * 0.6, 0.15 + tele * 0.5);
-      v.eye.scale.setScalar(1 + tele * (0.8 + 0.4 * Math.sin(now * 40)));
+      v.eye.scale.setScalar((1 + tele * (0.8 + 0.4 * Math.sin(now * 40))) * (v.model ? 0.65 : 1));
+      if (v.model) {
+        v.model.rotation.y = e.yaw;
+        v.model.rotation.x = e.pitch * 0.15;
+      }
     } else if (e.kind === 'walker') {
       v.g.rotation.y = e.yaw;
       const sw2 = Math.sin(e.phase) * 0.6;
       v.legs[0].rotation.x = sw2; v.legs[1].rotation.x = -sw2;
       v.body.position.y = 0.8 + Math.abs(Math.cos(e.phase)) * 0.05;
+      if (v.model) {
+        v.model.position.y = v.modelBasePosition.y + Math.abs(Math.cos(e.phase)) * 0.035;
+        v.model.rotation.z = Math.sin(e.phase) * 0.035;
+      }
     } else if (e.kind === 'boss') {
       const phaseTransition = e.st === 'phaseTransition';
       const steamTell = e.st === 'steamTell', steamSpin = e.st === 'steamSpin';
@@ -438,6 +507,10 @@ export function renderEnemies() {
       const chargeTell = e.st === 'chargeTell', slagTell = e.st === 'slagTell', groundTell = e.st === 'groundTell';
       // Animate only the added parts. The boss transform, hitbox and core center stay as before.
       const charging = e.st === 'charge', pounding = e.st === 'groundRecover';
+      if (v.model) {
+        v.model.rotation.z = phaseTransition ? Math.sin(e.phase) * 0.045 : 0;
+        v.model.scale.y = 1 + Math.sin(now * 2.2) * 0.006;
+      }
       const gait = e.st === 'enter' ? Math.sin(e.phase * 1.4) * 0.13 :
         charging ? Math.sin(e.phase * 2.4) * 0.26 : Math.sin(now * 1.8) * 0.025;
       v.legs[0].hip.rotation.x = gait;
@@ -512,10 +585,6 @@ export function renderEnemies() {
         v.model.position.x += shake;
         v.model.position.y += Math.sin(now * 5 + i) * 0.025;
         v.model.rotation.x = e.st === 'swoop' ? -0.6 : 0;
-        if (v.modelMixer) {
-          v.modelMixer.update(Math.min(0.1, Math.max(0, now - v.modelLastTime)));
-          v.modelLastTime = now;
-        }
       }
       if (e.st === 'swoop') emit(e.x, e.y + 0.4, e.z, 0, 0, 0, 0.25, C_MOLTEN, 0);
     } else if (v.block) {
