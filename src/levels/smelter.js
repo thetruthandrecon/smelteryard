@@ -5,17 +5,18 @@ import { addEnt } from '../enemies/enemies.js';
 // Smelter Yard: the full stage
 export function defineSmelter() {
   // 1. Intro run through the yard (floor top 0)
-  box(-7, 7, -1, 6, 12, 13, 'yardWall');
-  box(-6, 6, -1, 0, 12, -14, 'yardFloor');
-  box(-7, -6, -1, 3, 12, -14, 'yardWall'); box(6, 7, -1, 3, 12, -14, 'yardWall');
-  box(-6, 6, -1, 0, -18, -34, 'yardFloor');                         // after a 4 m lava pit
-  box(-7, -6, -1, 3, -18, -34, 'yardWall');
-  box(6, 7, -1, 3, -18, -29, 'yardWall'); box(6, 8.5, -1, 3.2, -29, -33, 'yardWall'); box(6, 7, -1, 3, -33, -34, 'yardWall');
+  box(-11, 11, -1, 6, 12, 13, 'yardWall');
+  box(-10, 10, -1, 0, 12, -14, 'yardFloor');
+  box(-11, -10, -1, 3, 12, -14, 'yardWall'); box(10, 11, -1, 3, 12, -14, 'yardWall');
+  box(-10, 10, -1, 0, -18, -34, 'yardFloor');                         // after a 4 m lava pit
+  box(-11, -10, -1, 3, -18, -34, 'yardWall');
+  box(10, 11, -1, 3, -18, -29, 'yardWall'); box(10, 12.5, -1, 3.2, -29, -33, 'yardWall'); box(10, 11, -1, 3, -33, -34, 'yardWall');
   box(2.5, 4.5, 0, 1.2, -26, -28, 'crate');
   box(-4.5, -2.5, 0, 1.2, -30.5, -32.5, 'crate');
-  box(-6, 6, -1, 0, -42, -58, 'yardFloor');                         // after an 8 m dash-jump pit
-  box(-7, -6, -1, 3, -42, -58, 'yardWall'); box(6, 7, -1, 3, -42, -58, 'yardWall');
-  box(-6, 6, 0, 0.35, -47, -48, 'spike');
+  box(-10, 10, -1, 0, -42, -58, 'yardFloor');                         // after an 8 m dash-jump pit
+  box(-11, -10, -1, 3, -42, -58, 'yardWall'); box(10, 11, -1, 3, -42, -58, 'yardWall');
+  box(-10, 10, 0, 0.35, -47, -48, 'spike');
+  box(-10, -6, 0, 4.6, -57, -58, 'furnaceWall'); box(6, 10, 0, 4.6, -57, -58, 'furnaceWall');
   box(-6, 6, -1, 1.6, -58, -74, 'furnaceFloor');                  // step up to the furnace
   box(-7, -6, -1, 4.6, -58, -74, 'furnaceWall'); box(6, 7, -1, 4.6, -58, -74, 'furnaceWall');
   // 2. Furnace shaft. Part A: zig-zag between the walls, then step out onto the ledge
@@ -55,10 +56,10 @@ export function defineSmelter() {
   checkpoint(0, 0, 6); checkpoint(0, 25, -93.5); checkpoint(0, 25, -146); checkpoint(0, 28, -192);
   LEVEL.goal = { kind: 'door', x: 0, y: 28, z: -213, xHalf: 2.6, zMin: -214.7, zMax: -211.8, triggerZ: -211 };
   LEVEL.path = [12, -246];
-  sign('SMELTER YARD', 0, 6.2, -13); sign('FURNACE SHAFT', 5.2, 6.5, -71); sign('CRUSHER HALL', 5.6, 28.5, -95);
+  sign('SMELTER YARD', 0, 6.2, -27); sign('FURNACE SHAFT', 5.2, 6.5, -71); sign('CRUSHER HALL', 5.6, 28.5, -95);
   sign('LAVA CONVEYOR', 5.6, 28.5, -149); sign('BOSS', 0, 36.2, -213.6);
   addEnt('walker', -4.5, 0, -23, { axis: 0, min: -4.5, max: 4.5 });
-  addEnt('turret', 7.25, 3.2, -31, { range: 15, yaw: Math.PI / 2 });
+  addEnt('turret', 11.25, 3.2, -31, { range: 19, yaw: Math.PI / 2 });
   addEnt('walker', 4.5, 0, -53, { axis: 0, min: -4.5, max: 4.5, dir: -1 });
   addEnt('flyer', 2.5, 4.2, -51, { range: 11 });
   addEnt('flyer', 0, 19, -82.5, { range: 11 });
@@ -70,6 +71,6 @@ export function defineSmelter() {
   addEnt('boss', 0, 28, -241, { entryZ: -231, entrySpeed: 3.4, introDuration: 2.4, chargeFrontZ: -218, chargeBackZ: -243.8, chargeMinX: -3.55, chargeMaxX: 3.55 });
   capsule(-4, 0, -44); capsule(0, 10.4, -82.5); capsule(3, 25, -140); capsule(-3, 28, -196);
   // set dressing (no collision): pipes along the yard walls, molten vats beside the hall
-  for (const [x, z0, z1] of [[-6.6, 12, -14], [6.6, 12, -14], [-6.6, -18, -34], [6.6, -18, -28.6], [-6.6, -42, -74], [6.6, -42, -74]]) DECO.push({ kind: 'pipe', x, y: 3.6, z0, z1 });
+  for (const [x, z0, z1] of [[-10.6, 12, -14], [10.6, 12, -14], [-10.6, -18, -34], [10.6, -18, -28.6], [-10.6, -42, -58], [10.6, -42, -58], [-6.6, -58, -74], [6.6, -58, -74]]) DECO.push({ kind: 'pipe', x, y: 3.6, z0, z1 });
   for (const [x, z] of [[-13, -100], [13, -112], [-13, -132], [13, -140], [-14, -172], [14, -200]]) DECO.push({ kind: 'vat', x, y: 26, z });
 }

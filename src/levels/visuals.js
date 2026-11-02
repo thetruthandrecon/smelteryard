@@ -24,23 +24,27 @@ function gridTex(base, line) {
 }
 const yardFloorTex = canvasTex(256, (g, s) => {
   const rnd = seeded(92);
-  g.fillStyle = '#56616b'; g.fillRect(0, 0, s, s);
-  g.fillStyle = '#333d47'; g.fillRect(0, 0, s, 8); g.fillRect(0, s - 8, s, 8);
-  g.fillRect(0, 0, 8, s); g.fillRect(s - 8, 0, 8, s);
-  g.strokeStyle = '#87939b'; g.lineWidth = 2;
-  g.strokeRect(12, 12, s - 24, s - 24);
-  for (const [x, y] of [[20, 20], [s - 20, 20], [20, s - 20], [s - 20, s - 20]]) {
-    g.fillStyle = '#202a32'; g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#747d82'; g.fillRect(0, 0, s, s);
+  for (let i = 0; i < 2800; i++) {
+    const a = 0.02 + rnd() * 0.13;
+    g.fillStyle = rnd() > 0.5 ? `rgba(210,220,220,${a})` : `rgba(14,27,32,${a})`;
+    g.fillRect(rnd() * s, rnd() * s, 1 + rnd() * 6, 1 + rnd() * 5);
   }
-  for (let i = 0; i < 90; i++) {
-    const x = rnd() * s, y = rnd() * s, len = 5 + rnd() * 38;
-    g.strokeStyle = rnd() > 0.7 ? 'rgba(193,91,43,0.28)' : 'rgba(20,29,37,0.18)';
-    g.lineWidth = 1 + rnd() * 2; g.beginPath(); g.moveTo(x, y); g.lineTo(x + len, y - len * 0.3); g.stroke();
+  for (let i = 0; i < 12; i++) {
+    const x = rnd() * s, y = rnd() * s, radius = 10 + rnd() * 30;
+    g.fillStyle = `rgba(33,42,46,${0.04 + rnd() * 0.08})`;
+    g.beginPath(); g.ellipse(x, y, radius, radius * (0.3 + rnd() * 0.5), rnd() * Math.PI, 0, Math.PI * 2); g.fill();
+  }
+  for (let i = 0; i < 7; i++) {
+    let x = rnd() * s, y = rnd() * s;
+    g.strokeStyle = 'rgba(21,32,38,0.56)'; g.lineWidth = 1 + rnd(); g.beginPath(); g.moveTo(x, y);
+    for (let k = 0; k < 5; k++) { x += (rnd() - 0.5) * 24; y += 7 + rnd() * 15; g.lineTo(x, y); }
+    g.stroke();
   }
 }, true);
 const yardWallTex = canvasTex(256, (g, s) => {
   const rnd = seeded(93);
-  g.fillStyle = '#665d57'; g.fillRect(0, 0, s, s);
+  g.fillStyle = '#817f7b'; g.fillRect(0, 0, s, s);
   g.fillStyle = '#353a3d'; g.fillRect(0, 0, s, 13); g.fillRect(0, s - 13, s, 13);
   g.fillRect(0, 0, 11, s); g.fillRect(s - 11, 0, 11, s);
   g.strokeStyle = '#9b8771'; g.lineWidth = 3; g.strokeRect(18, 18, s - 36, s - 36);
@@ -70,8 +74,8 @@ const doorTex = canvasTex(128, (g, s) => {
 const MATS = {
   floor: new THREE.MeshStandardMaterial({ map: gridTex('#c3cad0', '#6b7680'), color: 0x8c96a0, roughness: 0.82, metalness: 0.2 }),
   wall: new THREE.MeshStandardMaterial({ map: gridTex('#cfc3b6', '#7a6a5c'), color: 0x8f8378, roughness: 0.78, metalness: 0.25 }),
-  yardFloor: new THREE.MeshStandardMaterial({ map: yardFloorTex, color: 0xc0c8cc, roughness: 0.74, metalness: 0.48 }),
-  yardWall: new THREE.MeshStandardMaterial({ map: yardWallTex, color: 0xb7aaa0, roughness: 0.82, metalness: 0.32 }),
+  yardFloor: new THREE.MeshStandardMaterial({ map: yardFloorTex, color: 0xd7dcdb, roughness: 0.88, metalness: 0.16 }),
+  yardWall: new THREE.MeshStandardMaterial({ map: yardWallTex, color: 0xc7cccb, roughness: 0.9, metalness: 0.12 }),
   furnaceFloor: new THREE.MeshStandardMaterial({ map: gridTex('#59636a', '#a4714d'), color: 0xa9a9a4, roughness: 0.76, metalness: 0.42 }),
   furnaceWall: new THREE.MeshStandardMaterial({ map: gridTex('#65574e', '#a26742'), color: 0xa3998f, roughness: 0.7, metalness: 0.5 }),
   crusherFloor: new THREE.MeshStandardMaterial({ map: gridTex('#515960', '#b37a4e'), color: 0xabb0b1, roughness: 0.68, metalness: 0.55 }),
@@ -114,13 +118,17 @@ const fontsReady = Promise.race([document.fonts ? document.fonts.load('600 54px 
 let levelGroup = null;
 let dynVis = [], capVis = [], cpVis = [];
 let yardSteam = [];
+let yardSky = null;
 let renderStageArt = null;
 const LV = { goalGem: null, goalBeam: null, doorGlow: null, doorPanels: [] };
 
 function buildOpeningYard(grp) {
-  const frame = new THREE.MeshStandardMaterial({ color: 0x29333c, metalness: 0.75, roughness: 0.42 });
-  const siding = new THREE.MeshStandardMaterial({ color: 0x62594e, metalness: 0.5, roughness: 0.7 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x18232b, metalness: 0.55, roughness: 0.65 });
+  const frame = new THREE.MeshStandardMaterial({ color: 0x42545e, metalness: 0.65, roughness: 0.52 });
+  const siding = new THREE.MeshStandardMaterial({ color: 0x777c7d, metalness: 0.28, roughness: 0.82 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x263844, metalness: 0.5, roughness: 0.68 });
+  const windowMat = new THREE.MeshStandardMaterial({ color: 0x324c59, emissive: 0x274353, emissiveIntensity: 0.3, roughness: 0.28, metalness: 0.2 });
+  const rubbleMat = new THREE.MeshStandardMaterial({ color: 0x5b6568, roughness: 0.96, metalness: 0.04 });
+  const roadPaint = new THREE.MeshBasicMaterial({ color: 0xb7a47a });
   const furnace = new THREE.MeshBasicMaterial({ color: 0xff6422, toneMapped: false });
   const lamp = new THREE.MeshBasicMaterial({ color: 0xffc175, toneMapped: false });
   const route = new THREE.MeshBasicMaterial({ color: 0x49b9c2, toneMapped: false });
@@ -130,14 +138,68 @@ function buildOpeningYard(grp) {
     m.receiveShadow = true; grp.add(m); return m;
   };
 
-  // Repeated overhead frames break up the long straight view without closing the playable lane.
-  for (const z of [3, -11, -27, -52]) {
-    for (const side of [-1, 1]) {
-      addBox(side * 6.75, 4.4, z, 0.7, 8.8, 0.85, frame);
-      addBox(side * 5.45, 6.8, z, 2.7, 0.28, 0.75, siding);
-      addBox(side * 5.0, 6.48, z - 0.43, 0.9, 0.12, 0.08, lamp);
+  // A smoky daylight skyline makes the first street feel open before the route enters the furnaces.
+  const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 256;
+  const paint = canvas.getContext('2d');
+  const skyGrad = paint.createLinearGradient(0, 0, 0, 256);
+  skyGrad.addColorStop(0, '#4b7190'); skyGrad.addColorStop(0.48, '#a5bdc5'); skyGrad.addColorStop(0.8, '#c9c6b7'); skyGrad.addColorStop(1, '#8b7770');
+  paint.fillStyle = skyGrad; paint.fillRect(0, 0, 512, 256);
+  const clouds = seeded(171);
+  for (let i = 0; i < 48; i++) {
+    const x = clouds() * 512, y = 35 + clouds() * 130;
+    paint.fillStyle = `rgba(221,228,224,${0.025 + clouds() * 0.07})`;
+    paint.beginPath(); paint.ellipse(x, y, 25 + clouds() * 70, 3 + clouds() * 10, 0, 0, Math.PI * 2); paint.fill();
+  }
+  const skyTex = new THREE.CanvasTexture(canvas); skyTex.colorSpace = THREE.SRGBColorSpace;
+  yardSky = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false, depthWrite: false, transparent: true }));
+  yardSky.position.set(0, 8, -28); grp.add(yardSky);
+  const daylight = new THREE.PointLight(0xc8e6ff, 28, 75, 2);
+  daylight.position.set(0, 24, -14); grp.add(daylight);
+
+  // Broken high-rise workshops sit beyond the collision walls; their shapes read against the sky.
+  for (const [side, z, height] of [[-1, 2, 22], [1, -8, 18], [-1, -23, 30], [1, -37, 27], [-1, -53, 24]]) {
+    const x = side * (17 + (Math.abs(z) % 3));
+    addBox(x, height / 2 - 1, z, 6, height, 6.5, siding);
+    for (const dx of [-2.5, 0, 2.5]) addBox(x + dx, height - 0.8, z, 0.28, 2.2, 7, frame);
+    for (const dz of [-2.6, 0, 2.6]) addBox(x - side * 3.05, height - 2.3, z + dz, 0.18, 1.1, 1.5, dark);
+    for (let row = 0; row < 4; row++) for (const dz of [-2.2, 0, 2.2]) {
+      addBox(x - side * 3.08, 5.2 + row * 3.2, z + dz, 0.09, 1.8, 1.2, windowMat);
     }
-    addBox(0, 7.35, z, 13.8, 1.0, 0.9, frame);
+    addBox(x, height + 0.3, z + 0.8, 6.7, 0.22, 4.8, frame).rotation.z = side * 0.09;
+  }
+  for (const [x, z, h] of [[-22, -22, 34], [19, -48, 32], [23, 7, 25]]) {
+    addBox(x, h / 2 - 1, z, 5, h, 5, dark);
+    for (let y = 5; y < h - 2; y += 4) addBox(x, y, z + 2.55, 4.5, 0.16, 0.12, frame);
+  }
+  // Broken concrete and fallen shop panels stay beyond the fence so collision remains readable.
+  const debris = seeded(312);
+  const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+  const rocks = new THREE.InstancedMesh(rockGeo, rubbleMat, 64);
+  const rockMatrix = new THREE.Matrix4(), rockPos = new THREE.Vector3(), rockRot = new THREE.Quaternion(), rockScale = new THREE.Vector3();
+  const rockEuler = new THREE.Euler();
+  for (let i = 0; i < 64; i++) {
+    const side = i % 2 ? 1 : -1;
+    const size = 0.25 + debris() * 0.9;
+    rockPos.set(side * (11.5 + debris() * 3), size * 0.55, 10 - debris() * 68);
+    rockEuler.set(debris() * 0.4, debris() * Math.PI * 2, debris() * 0.3);
+    rockRot.setFromEuler(rockEuler); rockScale.set(size * (0.7 + debris()), size * 0.6, size * (0.8 + debris()));
+    rockMatrix.compose(rockPos, rockRot, rockScale); rocks.setMatrixAt(i, rockMatrix);
+  }
+  rocks.castShadow = true; rocks.receiveShadow = true; grp.add(rocks);
+  for (const [side, z] of [[-1, -6], [1, -23], [-1, -49]]) {
+    const x = side * 12.7;
+    addBox(x, 0.85, z, 3.1, 0.32, 1.7, frame).rotation.z = side * 0.38;
+    addBox(x + side * 1.2, 1.1, z - 0.7, 0.25, 2.2, 0.22, dark).rotation.z = side * 0.55;
+  }
+
+  // Repeated overhead frames break up the long straight view without closing the playable lane.
+  for (const z of [-27, -52]) {
+    for (const side of [-1, 1]) {
+      addBox(side * 10.75, 4.4, z, 0.7, 8.8, 0.85, frame);
+      addBox(side * 9.45, 6.8, z, 2.7, 0.28, 0.75, siding);
+      addBox(side * 9.0, 6.48, z - 0.43, 0.9, 0.12, 0.08, lamp);
+    }
+    addBox(0, 7.35, z, 21.8, 1.0, 0.9, frame);
     addBox(0, 6.78, z - 0.46, 3.6, 0.12, 0.1, furnace);
     const light = new THREE.PointLight(0xff792b, 9, 16, 2);
     light.position.set(0, 6.4, z); grp.add(light);
@@ -145,7 +207,7 @@ function buildOpeningYard(grp) {
 
   // Boiler houses, stacks and windows rise beyond the side walls as nearby scenery.
   for (const [side, z, height] of [[-1, -5, 11], [1, -20, 13], [-1, -31, 16], [1, -46, 12]]) {
-    const x = side * 10;
+    const x = side * 15;
     addBox(x, height / 2 - 1, z, 5.2, height, 7, siding);
     addBox(x, height - 0.5, z, 5.7, 0.65, 7.5, frame);
     addBox(x - side * 1.2, height + 2.8, z + 1.7, 1.4, 6.5, 1.4, dark);
@@ -158,21 +220,24 @@ function buildOpeningYard(grp) {
 
   // Flush wall vents and floor marks make enemy lanes and jump edges legible.
   for (const z of [7, -4, -22, -30, -45, -54]) for (const side of [-1, 1]) {
-    const x = side * 5.97;
+    const x = side * 9.97;
     addBox(x, 1.8, z, 0.07, 1.55, 2.5, dark);
     for (const dz of [-0.75, -0.25, 0.25, 0.75]) addBox(x - side * 0.055, 1.8, z + dz, 0.08, 1.15, 0.09, furnace);
   }
   for (const z of [-12.9, -19.1, -32.9, -43.1]) {
-    addBox(0, 0.035, z, 10.8, 0.055, 0.14, lamp);
-    for (const x of [-4.8, -2.4, 0, 2.4, 4.8]) addBox(x, 0.036, z + 0.45, 1.1, 0.055, 0.13, furnace);
+    addBox(0, 0.035, z, 18.8, 0.055, 0.14, lamp);
+    for (const x of [-8.8, -4.4, 0, 4.4, 8.8]) addBox(x, 0.036, z + 0.45, 1.1, 0.055, 0.13, furnace);
   }
   for (const z of [5, -1, -7, -23, -27, -48, -53]) {
-    for (const x of [-4.9, 4.9]) addBox(x, 0.026, z, 0.09, 0.045, 2.3, route);
+    for (const x of [-8.9, 8.9]) addBox(x, 0.026, z, 0.09, 0.045, 2.3, route);
+  }
+  for (const [start, end] of [[12, -14], [-18, -34], [-42, -57]]) {
+    for (let z = start - 2; z > end + 1; z -= 4) addBox(0, 0.012, z, 0.12, 0.025, 1.5, roadPaint);
   }
 
   yardSteam = [];
   renderStageArt = null;
-  for (const [x, y, z] of [[-8.8, 16, -3.3], [8.8, 18, -18.3], [-8.8, 21, -29.3], [8.8, 17, -44.3]]) {
+  for (const [x, y, z] of [[-13.8, 16, -3.3], [13.8, 18, -18.3], [-13.8, 21, -29.3], [13.8, 17, -44.3]]) {
     for (let i = 0; i < 3; i++) {
       const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: 0x93a5ad, transparent: true, opacity: 0.15, depthWrite: false }));
       grp.add(puff); yardSteam.push({ puff, x, y, z, phase: i / 3 });
@@ -181,6 +246,7 @@ function buildOpeningYard(grp) {
 }
 export function buildLevelVisuals() {
   if (levelGroup) {
+    if (yardSky) { yardSky.material.map.dispose(); yardSky.material.dispose(); }
     scene.remove(levelGroup);
     levelGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
   }
@@ -188,9 +254,12 @@ export function buildLevelVisuals() {
   levelGroup = grp;
   LV.doorPanels = [];
   yardSteam = [];
+  yardSky = null;
   scene.add(grp);
   const edgePts = [];
   const spikeCones = [];
+  const fencePosts = [];
+  const fenceMat = new THREE.MeshStandardMaterial({ color: 0x34444d, metalness: 0.7, roughness: 0.48 });
   for (const b of SOLIDS) {
     if (b.dyn) continue;
     const w = b.max[0] - b.min[0], h = b.max[1] - b.min[1], d = b.max[2] - b.min[2];
@@ -200,14 +269,33 @@ export function buildLevelVisuals() {
       for (let x = b.min[0] + 0.2; x < b.max[0] - 0.05; x += 0.36) for (let z = b.min[2] + 0.2; z < b.max[2] - 0.05; z += 0.36) spikeCones.push([x, b.min[1] + 0.08, z, h - 0.08]);
       continue;
     }
+    if (b.kind === 'yardWall' && w < 1.2 && d > 5) {
+      // The street is still bounded by its solid collision walls, but the upper half is open ironwork.
+      const top = 1.2, x = (b.min[0] + b.max[0]) / 2, z = (b.min[2] + b.max[2]) / 2;
+      const base = new THREE.Mesh(new THREE.BoxGeometry(w, top - b.min[1], d), MATS.yardWall);
+      base.position.set(x, (b.min[1] + top) / 2, z); base.castShadow = true; base.receiveShadow = true; grp.add(base);
+      for (const y of [1.4, 2.88]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.13, d), fenceMat);
+        rail.position.set(x, y, z); rail.castShadow = true; grp.add(rail);
+      }
+      for (let postZ = b.min[2] + 0.3; postZ < b.max[2]; postZ += 1.5) fencePosts.push([x, 2.1, postZ]);
+      topEdges(edgePts, b.min[0], b.min[2], b.max[0], b.max[2], top + 0.012);
+      continue;
+    }
     const geo = new THREE.BoxGeometry(w, h, d);
-    scaleBoxUV(geo, w, h, d, b.kind === 'door' ? 4 : 2);
+    scaleBoxUV(geo, w, h, d, b.kind === 'door' || b.kind === 'yardFloor' ? 4 : 2);
     const m = new THREE.Mesh(geo, MATS[b.kind] || MATS.floor);
     m.position.set((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2);
     m.castShadow = true; m.receiveShadow = true;
     grp.add(m);
     if (b.kind === 'door' && b.closedMin) LV.doorPanels.push({ b, mesh: m });
     if (b.kind !== 'door') topEdges(edgePts, b.min[0], b.min[2], b.max[0], b.max[2], b.max[1] + 0.012);
+  }
+  if (fencePosts.length) {
+    const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 1.8, 0.16), fenceMat, fencePosts.length);
+    const transform = new THREE.Matrix4();
+    fencePosts.forEach(([x, y, z], i) => { transform.makeTranslation(x, y, z); posts.setMatrixAt(i, transform); });
+    posts.castShadow = true; grp.add(posts);
   }
   {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(edgePts, 3));
@@ -322,6 +410,7 @@ export function buildLevelVisuals() {
 export function renderLevel(dt) {
   const now = performance.now() / 1000;
   setAmbience(LEVEL.id, p.z, state.mode === 'play');
+  if (yardSky) yardSky.material.opacity = Math.max(0, Math.min(1, (p.z + 72) / 18));
   if (renderStageArt) renderStageArt(now);
   for (const v of yardSteam) {
     const rise = (now * 0.16 + v.phase) % 1;

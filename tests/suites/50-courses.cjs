@@ -135,6 +135,11 @@ module.exports = {
       const center = () => { input.moveX = cl(-p.x * 0.5); };
 
       // 1. the yard
+      // Use the added street width before taking the same pit, dash-jump and spike route.
+      clearIn(); input.moveX = 1;
+      if (!until(() => p.x > 8, 4)) return fail('reach new street edge');
+      input.moveX = -1;
+      if (!until(() => p.x < 0.5, 4)) return fail('return to central route');
       clearIn(); input.moveY = 1;
       if (!until(() => p.z < -13.65 && p.grounded, 5, center)) return fail('reach pit 1');
       jump(); tick();
